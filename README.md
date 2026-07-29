@@ -57,13 +57,21 @@ Este repositorio resuelve el problema operando bajo el marco BLERP (Bandwidth, L
 ```text
 tetragonisca-vision-edgeai/
 ├── data/
-│   ├── raw/                # Instructivo y descarga de datos crudos(Zenodo)
-│   └── processed/          # Dataset procesado, auditado y dividido en Splits
-├── scripts/
-│   └── preparar_dataset_004.py   # Pipeline de limpieza e inyección de clase negativa
-├── docs/                   # Documentación técnica adicional
-├── LICENSE                 # Licencia de código abierto del proyecto
-└── README.md               # Portada e instrucciones principales
+│   ├── raw/                      # Descarga de datos crudos (Zenodo Colmena 004)
+│   └── processed/                # Datasets procesados unificados para Edge Impulse
+│       ├── train/                # Conjunto de entrenamiento con parches de fondo (unknown)
+│       └── test/                 # Conjunto reservado de evaluación (Test set)
+├── models/                       # Artefactos exportados para inferencia local
+│   ├── fomo_tetragonisca_int8.lite # Modelo TensorFlow Lite cuantizado int8 (~53 KB)
+│   ├── labels.txt                # Archivo de etiquetas ("Abeja")
+│   └── model_tetragonisca.eim    # Binario ejecutable para Linux AARCH64 (Raspberry Pi)
+├── scripts/                      # Pipeline MLOps de preparación de datos
+│   ├── 01_preparar_train.py      # Limpieza de Colmena 004 e inyección de clase negativa
+│   ├── 02_copiar_valid_a_train.py # Unificación del split de validación en train
+│   └── 03_preparar_test.py       # Preparación del conjunto reservado de pruebas
+├── .gitignore                    # Reglas de exclusión para Git (datasets y temporales)
+├── LICENSE                       # Licencia BSD 3-Clause
+└── README.md                     # Portada e instrucciones principales del proyecto
 ```
 
 ## 4. Dataset Crudo y Metadatos Científicos
