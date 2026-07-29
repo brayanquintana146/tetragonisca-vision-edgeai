@@ -1,0 +1,21 @@
+# Python / Entornos
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Datos crudos y procesados
+data/raw/*
+!data/raw/.gitkeep
+data/processed/train/*
+data/processed/test/*
+!data/processed/train/.gitkeep
+!data/processed/test/.gitkeep
+*.zip
+
+# Binarios pesados
+models/*.eim
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
