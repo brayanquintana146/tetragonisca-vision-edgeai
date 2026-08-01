@@ -2,10 +2,10 @@
 
 El análisis del flujo de abejas en la piquera de *Tetragonisca angustula* presenta desafíos únicos para la visión por computadora: las abejas se cruzan constantemente a altas velocidades, oscilan o revolotean en la entrada sin decidirse a salir, y pueden aparecer borrosas debido a la limitación de cuadros por segundo de la cámara.
 
-Para abordar esto, el sistema implementa un **Pipeline de Seguimiento y Conteo Adaptativo** robusto.
+Para abordar esto, el sistema implementa un **Pipeline de Seguimiento y Conteo Adaptativo**.
 
 ## 1. Algoritmo de Asociación Global (Algoritmo Húngaro)
-El principal problema al rastrear enjambres es el "ID Switching" (intercambio de identidades). Los enfoques codiciosos tradicionales emparejan los centroides más cercanos de forma ingenua, lo cual falla estrepitosamente cuando dos o más abejas se cruzan, robándose mutuamente las identidades y corrompiendo las trayectorias.
+El principal problema al rastrear enjambres es el "ID Switching" (intercambio de identidades). Los enfoques que emparejan los centroides más cercanos por distancia euclidiana presentan limitaciones cuando dos o más abejas se cruzan, intercambiando las identidades y afectando las trayectorias.
 
 Para resolver esto, se utiliza el **Algoritmo Húngaro** (`scipy.optimize.linear_sum_assignment`). Este algoritmo analiza una matriz de distancias globales entre todas las posiciones predichas y las nuevas detecciones en cada fotograma. En lugar de buscar la solución más óptima para la primera abeja, encuentra la asignación matemática que minimiza la distancia total del sistema, garantizando que los cruces y aglomeraciones no rompan las trayectorias individuales.
 
@@ -19,9 +19,9 @@ Debido a la velocidad del vuelo de las Jataí, las detecciones por fotograma pue
 ## 3. Lógica de Conteo Anti-Oscilaciones (Regla de Evento Único)
 Las abejas guardianas y forrajeras suelen exhibir patrones de vuelo oscilatorio en el borde del ROI (Region of Interest). Cruzan la línea hacia afuera y hacia adentro repetidamente antes de decidir volar o aterrizar, inflando artificialmente los sistemas de conteo tradicionales.
 
-Para neutralizar este fenómeno, se aplica una **arquitectura de bloqueo estricto**:
+Para neutralizar este fenómeno, se aplica una **lógica de bloqueo por ID**:
 - Existe un conjunto en memoria de estado definitivo (`self.counted = set()`).
-- En cuanto un ID registrado cruza la línea por primera vez (ya sea de adentro hacia afuera o viceversa), se incrementa el contador correspondiente y el ID queda sellado criptográficamente en el registro de contabilizados.
+- En cuanto un ID registrado cruza la línea por primera vez (ya sea de adentro hacia afuera o viceversa), se incrementa el contador correspondiente y el ID queda registrado permanentemente.
 - Cualquier cruce posterior de esa misma abeja a lo largo del límite, sin importar si cambia de dirección, **se ignora por completo**. Solo un desplazamiento continuo, la pérdida total de visibilidad y el reingreso eventual con un nuevo ID restablecerá la posibilidad de un nuevo conteo.
 
 ## 4. Conteo Inferido Vectorialmente para Vuelos Veloces

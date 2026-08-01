@@ -13,14 +13,14 @@ Este proyecto usa un proceso reproducible centrado en los datos que limpia, revi
 
 ## 1. Visión General
 
-El monitoreo de la abeja nativa sin aguijón Tetragonisca angustula es clave para la agricultura de precisión y la conservación ecológica. Los sistemas tradicionales basados en la nube o en arquitecturas pesadas (como YOLO estándar) enfrentan colapsos de memoria y dependencia de conectividad constante a internet.
+El monitoreo de la abeja nativa sin aguijón Tetragonisca angustula es relevante para la agricultura de precisión y la conservación ecológica. Los sistemas tradicionales basados en la nube o en arquitecturas de mayor complejidad (como YOLO estándar) suelen presentar limitaciones de memoria y dependencia de conectividad constante a internet. Además de la detección con Inteligencia Artificial, este proyecto integra un algoritmo local de seguimiento espacial (MOT) para el conteo de individuos.
 
-Este repositorio resuelve el problema operando bajo el marco BLERP (Bandwidth, Latency, Economics, Reliability, Privacy):
+Este repositorio resuelve el procesamiento bajo el marco BLERP (Bandwidth, Latency, Economics, Reliability, Privacy):
 
 - **Ancho de Banda (Bandwidth):** Procesa y analiza las imágenes localmente en el dispositivo sin necesidad de transmitir streaming continuo de video en alta definición hacia servidores externos.
 - **Latencia (Latency):** Ejecuta la inferencia y localización en milisegundos directamente en el hardware embebido, permitiendo una respuesta inmediata en el punto de captura.
 - **Economía (Economics):** Reduce los costos de operación al eliminar la transferencia masiva de datos por red móvil o satelital, así como el pago por consumo de infraestructura de cómputo en la nube.
-- **Fiabilidad (Reliability):** Garantiza un funcionamiento continuo e independiente de forma offline, operando con total autonomía en entornos rurales sin conectividad a internet.
+- **Fiabilidad (Reliability):** Permite un funcionamiento continuo e independiente de forma offline, operando con autonomía en entornos rurales sin conectividad a internet.
 - **Privacidad (Privacy):** Mantiene los datos procesados localmente dentro del dispositivo, asegurando que la información visual y ambiental de la ubicación no sea expuesta ni transmitida a servidores de terceros.
 
 ## 2. Arquitectura del Pipeline MLOps
@@ -220,9 +220,9 @@ El rendimiento del modelo FOMO se evaluó en la fase de entrenamiento utilizando
 ### Análisis Técnico del Entrenamiento
 
 1. **Eliminación Total de Falsos Positivos (Precision = 1.00):**
-   - La inyección de los 50 parches de madera lisa con etiquetas vacías (*Data-Centric AI*) enseñó exitosamente a la red neuronal a ignorar las vetas y texturas de la piquera.
+   - La inyección de los 50 parches de madera lisa con etiquetas vacías (*Data-Centric AI*) permitió a la red neuronal aprender a ignorar las vetas y texturas de la piquera.
 2. **Sensibilidad y Oclusiones (Recall = 0.87):**
-   - El 12.8% de falsos negativos responde a abejas que ingresaron en ángulos complejos o en bordes de la celda de salida de FOMO, un margen sumamente aceptable para muestreo temporal en microcontroladores de bajos recursos.
+   - El 12.8% de falsos negativos responde a abejas que ingresaron en ángulos complejos o en bordes de la celda de salida de FOMO, un margen aceptable para muestreo temporal en microcontroladores de bajos recursos.
 
 ## 8. Resultados y Métricas de Evaluación Final (Model Testing Output - Test Set)
 
@@ -236,23 +236,22 @@ Posteriormente, se ejecutó una evaluación masiva en la pestaña **Model testin
 
 | Métrica | Valor | Porcentaje | Descripción |
 | :--- | :---: | :---: | :--- |
-| **Precision (non-background)** | **1.00** | **100.0%** | Mantiene la ausencia total de falsos positivos en datos no vistos. |
+| **Precision (non-background)** | **1.00** | **100.0%** | Mantiene la ausencia de falsos positivos en datos de prueba. |
 | **Recall (non-background)** | **0.90** | **90.0%** | Incremento en la sensibilidad: detecta el 90% de las abejas presentes. |
-| **F1 Score (non-background)** | **0.95** | **95.0%** | Desempeño global sobresaliente en el conjunto de evaluación reservado. |
+| **F1 Score (non-background)** | **0.95** | **95.0%** | Desempeño en el conjunto de evaluación reservado. |
 
 ### Análisis Técnico del Desempeño en Pruebas (*Testing*)
 
 1. **Alta Capacidad de Generalización:**
    - La precisión perfecta de **1.00** y el incremento del **Recall** de **0.87 a 0.90** en datos no vistos demuestran que el modelo no sufrió de sobreajuste (*overfitting*) y generaliza de manera robusta en escenarios reales.
 2. **Validación del Enfoque Data-Centric:**
-   - El F1-Score final de **0.95** en la fase de testing confirma que el balanceo del dataset y la inyección de parches de fondo generaron una red neuronal sumamente confiable para su despliegue local en dispositivos Edge AI.
+   - El F1-Score final de **0.95** en la fase de testing confirma que el balanceo del dataset y la inyección de parches de fondo generaron un modelo adecuado para su despliegue local en dispositivos Edge AI.
 
 ## 9. Ejecución Local y Monitoreo en Tiempo Real
 
-El pipeline de inferencia y conteo local utiliza el modelo exportado TFLite para realizar predicciones directamente sobre fuentes de video en dispositivos locales, aplicando un sistema avanzado de **Seguimiento (Tracker)** y **Conteo basado en Región de Interés (ROI)**.
+El pipeline de inferencia y conteo local utiliza el modelo exportado TFLite para realizar predicciones directamente sobre fuentes de video en dispositivos locales, aplicando un módulo de **Seguimiento (Tracker)** y **Conteo basado en Región de Interés (ROI)**.
 
-Para la documentación matemática completa del Algoritmo Húngaro, los bloqueos oscilatorios y el conteo inferido por velocidad que operan detrás de este pipeline, consulta el archivo técnico:
-👉 **[Documentación del Algoritmo de Seguimiento](docs/TRACKING_ALGORITHM.md)**
+Para consultar los detalles de implementación del Algoritmo Húngaro, el filtro de oscilaciones y el conteo inferido, revisa el archivo técnico: **[Documentación del Algoritmo de Seguimiento](docs/TRACKING_ALGORITHM.md)**
 
 ### Uso del Pipeline de Inferencia
 
@@ -273,8 +272,8 @@ python main.py --video "examples/videos/0040-1.mp4" --roi-x 900 --roi-y 600 --ro
 Las calibraciones realizadas sobre secuencias biológicas reales confirmadas de forma manual por investigadores han arrojado los siguientes promedios de exactitud en situaciones de vuelo de alto tránsito:
 - **Entradas (IN):** ~90% de exactitud (Bloqueo efectivo de falsos positivos en el tubo).
 - **Salidas (OUT):** ~85% de exactitud (Restaurado por vectores de cinemática predictiva).
-- **Conteo Acumulado:** Seguimiento robusto de identidades únicas manteniendo el historial de la colonia.
+- **Conteo Acumulado:** Seguimiento de identidades únicas manteniendo el historial de la colonia.
 
 > [!NOTE]
 > **Validación Científica:** Según la investigación de Brasil *"Multiple Object Tracking in Native Bee Hives - Jataí"*, al aplicar su Filtro de Remoción de Duplicados (RD), el conteo biológico real es de **156 abejas totales, 42 entradas y 42 salidas**. Sin aplicar filtros (conteo bruto), los resultados biológicos arrojan 156 totales, 42 entradas y **85 salidas**. 
-> Estos datos de campo se encuentran registrados oficialmente en el archivo `0040-1.txt` del dataset `004 - MOT`, del cual extrajimos el video de prueba original (`0040-1.mp4`). Los resultados de nuestro modelo adaptativo local (~38 IN, ~48 OUT, ~175 TOTAL) se alinean excelentemente con los resultados filtrados oficiales, logrando resolver las oscilaciones con un mínimo costo de cómputo en hardware limitado.
+> Estos datos de campo se encuentran registrados oficialmente en el archivo `0040-1.txt` del dataset `004 - MOT`, del cual extrajimos el video de prueba original (`0040-1.mp4`). Los resultados del pipeline local (~38 IN, ~48 OUT, ~175 TOTAL) se aproximan a los resultados oficiales del filtro RD, procesándose en tiempo real en hardware de bajos recursos.
