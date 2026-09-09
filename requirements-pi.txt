@@ -1,0 +1,15 @@
+# Dependencias para Raspberry Pi Zero 2W
+# Instalar con: pip install -r requirements-pi.txt
+
+# Vision (sin GUI — más liviano que opencv-python)
+opencv-python-headless>=4.8.0
+numpy>=1.23.0
+
+# Inferencia TFLite (elige UNO según tu instalación)
+# Opción A — Google ai-edge-litert (recomendado, sucesor de tflite-runtime)
+ai-edge-litert>=1.0.0
+# Opción B — tflite-runtime clásico (si ai-edge-litert no instala en arm)
+# tflite-runtime>=2.14.0
+
+# Dashboard web
+flask>=3.0.0
