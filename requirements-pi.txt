@@ -4,6 +4,7 @@
 # Vision (sin GUI — más liviano que opencv-python)
 opencv-python-headless>=4.8.0
 numpy>=1.23.0
+scipy>=1.10.0
 
 # Inferencia TFLite (elige UNO según tu instalación)
 # Opción A — Google ai-edge-litert (recomendado, sucesor de tflite-runtime)

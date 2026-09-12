@@ -162,7 +162,8 @@ def main():
     # Inicializar detector FOMO con LiteRT
     detector = FOMODetector(model_path=args.model, threshold=args.threshold, num_threads=args.num_threads)
 
-    cap = cv2.VideoCapture(args.video)
+    video_source = int(args.video) if args.video.isdigit() else args.video
+    cap = cv2.VideoCapture(video_source)
     if not cap.isOpened():
         print(f"Error: No se pudo abrir el video '{args.video}'.")
         sys.exit(1)
@@ -216,7 +217,10 @@ def main():
     print("-" * 60)
 
     frame_idx = 0
+    processed_frames = 0
+    total_processing_time = 0.0
     t_last = time.perf_counter()
+    global_start_time = time.time()
 
     if args.show:
         win_name = "Tetragonisca Vision - Inferencia y Conteo"
@@ -237,6 +241,7 @@ def main():
             continue
 
         t0 = time.perf_counter()
+        processed_frames += 1
 
         # 1. Inferencia real con FOMO
         centroids = detector.detect(frame)
@@ -345,7 +350,9 @@ def main():
 
         # Calcular FPS sobre el tiempo total del frame (inferencia + render si aplica)
         t_now = time.perf_counter()
-        fps_proc = 1.0 / max(t_now - t0, 1e-6)
+        proc_time = t_now - t0
+        total_processing_time += proc_time
+        fps_proc = 1.0 / max(proc_time, 1e-6)
 
         # Actualizar log CSV
         if csv_writer is not None:
@@ -367,6 +374,14 @@ def main():
                 fps_proc=fps_proc,
             )
 
+        # Imprimir progreso en consola (para saber que no está congelado)
+        if frame_idx % 30 == 0:
+            elapsed = time.time() - global_start_time
+            m, s = divmod(int(elapsed), 60)
+            h, m = divmod(m, 60)
+            time_str = f"{h:02d}:{m:02d}:{s:02d}" if h > 0 else f"{m:02d}:{s:02d}"
+            print(f"[{time_str}] Procesando frame {frame_idx:05d} | FPS: {fps_proc:.1f} | IN: {counts['in']} | OUT: {counts['out']}")
+
         if args.show:
             cv2.imshow("Tetragonisca Vision - Inferencia y Conteo", frame)
             if cv2.waitKey(1) & 0xFF == ord('q'):
@@ -380,12 +395,25 @@ def main():
     if args.show:
         cv2.destroyAllWindows()
 
+    total_elapsed = time.time() - global_start_time
+    m, s = divmod(int(total_elapsed), 60)
+    h, m = divmod(m, 60)
+    total_time_str = f"{h:02d}:{m:02d}:{s:02d}" if h > 0 else f"{m:02d}:{s:02d}"
+
+    avg_fps = (processed_frames / total_processing_time) if total_processing_time > 0 else 0.0
+
     print("\n" + "=" * 60)
-    print("PROCESAMIENTO COMPLETADO")
-    print(f"Frames procesados : {frame_idx}")
-    print(f"Total Abejas      : {tracker.next_object_id}")
-    print(f"Entradas (IN)     : {counts['in']}")
-    print(f"Salidas  (OUT)    : {counts['out']}")
+    print(" " * 17 + "RESUMEN DE PROCESAMIENTO")
+    print("=" * 60)
+    print(f" Tiempo Total de Ejecución : {total_time_str}")
+    print(f" Velocidad Promedio (IA)   : {avg_fps:.1f} FPS")
+    print("-" * 60)
+    print(f" Total Cuadros (Video)     : {frame_idx}")
+    print(f" Cuadros Procesados (IA)   : {processed_frames}")
+    print("-" * 60)
+    print(f" Identidades Únicas        : {tracker.next_object_id}")
+    print(f" Entradas (IN)             : {counts['in']}")
+    print(f" Salidas (OUT)             : {counts['out']}")
     print("=" * 60)
 
 
