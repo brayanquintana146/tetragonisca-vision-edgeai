@@ -247,99 +247,105 @@ def main():
         # 3. Conteo en la ROI de la piquera (BeeCounter)
         counts = counter.update(objects, tracker.trajectories, deregistered=deregistered)
 
-        # Calcular FPS de procesamiento
-        t_now = time.perf_counter()
-        fps_proc = 1.0 / max(t_now - t0, 1e-6)
+        # Calcular si necesitamos renderizar el frame
+        # (solo cuando hay que mostrarlo, guardarlo en video o hacer snapshot)
+        need_snapshot = args.snapshot_every > 0 and frame_idx % args.snapshot_every == 0
+        need_render = out is not None or args.show or need_snapshot
 
-        # 4. Renderizado visual (Piquera, IDs, Trayectorias y HUD)
-        # Círculo virtual de la piquera
-        cv2.circle(frame, (args.roi_x, args.roi_y), args.roi_r, (0, 255, 255), 2)
-        cv2.circle(frame, (args.roi_x, args.roi_y), 4, (0, 255, 255), -1)
+        if need_render:
+            # 4. Renderizado visual (Piquera, IDs, Trayectorias y HUD)
+            # Círculo virtual de la piquera
+            cv2.circle(frame, (args.roi_x, args.roi_y), args.roi_r, (0, 255, 255), 2)
+            cv2.circle(frame, (args.roi_x, args.roi_y), 4, (0, 255, 255), -1)
 
-        # Dibujar centroides, IDs y trayectorias (solo objetos activamente detectados)
-        for object_id, centroid in objects.items():
-            # No dibujar objetos "fantasma" que ya no están siendo detectados
-            if tracker.disappeared.get(object_id, 0) > 2:
-                continue
+            # Dibujar centroides, IDs y trayectorias (solo objetos activamente detectados)
+            for object_id, centroid in objects.items():
+                # No dibujar objetos "fantasma" que ya no están siendo detectados
+                if tracker.disappeared.get(object_id, 0) > 2:
+                    continue
 
-            cx, cy = int(centroid[0]), int(centroid[1])
+                cx, cy = int(centroid[0]), int(centroid[1])
 
-            # Centroide actual (punto rojo sólido)
-            cv2.circle(frame, (cx, cy), 5, (0, 0, 255), -1)
+                # Centroide actual (punto rojo sólido)
+                cv2.circle(frame, (cx, cy), 5, (0, 0, 255), -1)
+                cv2.putText(
+                    frame,
+                    f"ID {object_id}",
+                    (cx + 8, cy - 8),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.4,
+                    (255, 255, 255),
+                    1,
+                )
+
+                # Trayectoria como puntos que se desvanecen
+                if object_id in tracker.trajectories:
+                    trail = tracker.trajectories[object_id]
+                    n = len(trail)
+                    for i, pt in enumerate(trail):
+                        # Opacidad: los puntos más recientes son más visibles
+                        alpha = (i + 1) / n
+                        color = (
+                            int(255 * alpha),   # B: azul claro al final
+                            int(180 * alpha),   # G
+                            int(50 * alpha),    # R
+                        )
+                        radius = max(1, int(3 * alpha))
+                        cv2.circle(frame, (int(pt[0]), int(pt[1])), radius, color, -1)
+
+            # Tablero de Estadísticas (HUD Transparente)
+            overlay = frame.copy()
+            cv2.rectangle(overlay, (10, 10), (300, 135), (0, 0, 0), -1)
+            cv2.addWeighted(overlay, 0.6, frame, 0.4, 0, frame)
+
             cv2.putText(
                 frame,
-                f"ID {object_id}",
-                (cx + 8, cy - 8),
+                "Tetragonisca Vision EdgeAI",
+                (20, 30),
                 cv2.FONT_HERSHEY_SIMPLEX,
-                0.4,
+                0.5,
                 (255, 255, 255),
                 1,
             )
+            cv2.putText(
+                frame,
+                f"Entradas (IN) : {counts['in']}",
+                (20, 60),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.6,
+                (0, 255, 0),
+                2,
+            )
+            cv2.putText(
+                frame,
+                f"Salidas  (OUT): {counts['out']}",
+                (20, 88),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.6,
+                (0, 0, 255),
+                2,
+            )
+            cv2.putText(
+                frame,
+                f"Total Abejas  : {tracker.next_object_id}",
+                (20, 116),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.6,
+                (255, 255, 0),
+                2,
+            )
 
-            # Trayectoria como puntos que se desvanecen
-            if object_id in tracker.trajectories:
-                trail = tracker.trajectories[object_id]
-                n = len(trail)
-                for i, pt in enumerate(trail):
-                    # Opacidad: los puntos más recientes son más visibles
-                    alpha = (i + 1) / n
-                    color = (
-                        int(255 * alpha),   # B: azul claro al final
-                        int(180 * alpha),   # G
-                        int(50 * alpha),    # R
-                    )
-                    radius = max(1, int(3 * alpha))
-                    cv2.circle(frame, (int(pt[0]), int(pt[1])), radius, color, -1)
+            if out is not None:
+                out.write(frame)
 
-        # Tablero de Estadísticas (HUD Transparente)
-        overlay = frame.copy()
-        cv2.rectangle(overlay, (10, 10), (300, 135), (0, 0, 0), -1)
-        cv2.addWeighted(overlay, 0.6, frame, 0.4, 0, frame)
+            # Guardar snapshot periódico para verificar tracking sin pantalla
+            if need_snapshot:
+                snap_path = os.path.join(args.snapshot_dir, f"snap_{frame_idx:06d}.jpg")
+                cv2.imwrite(snap_path, frame)
 
-        cv2.putText(
-            frame,
-            "Tetragonisca Vision EdgeAI",
-            (20, 30),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.5,
-            (255, 255, 255),
-            1,
-        )
-        cv2.putText(
-            frame,
-            f"Entradas (IN) : {counts['in']}",
-            (20, 60),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.6,
-            (0, 255, 0),
-            2,
-        )
-        cv2.putText(
-            frame,
-            f"Salidas  (OUT): {counts['out']}",
-            (20, 88),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.6,
-            (0, 0, 255),
-            2,
-        )
-        cv2.putText(
-            frame,
-            f"Total Abejas  : {tracker.next_object_id}",
-            (20, 116),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.6,
-            (255, 255, 0),
-            2,
-        )
-
-        if out is not None:
-            out.write(frame)
-
-        # Guardar snapshot periódico para verificar tracking sin pantalla
-        if args.snapshot_every > 0 and frame_idx % args.snapshot_every == 0:
-            snap_path = os.path.join(args.snapshot_dir, f"snap_{frame_idx:06d}.jpg")
-            cv2.imwrite(snap_path, frame)
+        # Calcular FPS sobre el tiempo total del frame (inferencia + render si aplica)
+        t_now = time.perf_counter()
+        fps_proc = 1.0 / max(t_now - t0, 1e-6)
 
         # Actualizar log CSV
         if csv_writer is not None:

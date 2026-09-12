@@ -1,4 +1,11 @@
 #!/usr/bin/env python3
+
+
+
+
+
+
+
 # -*- coding: utf-8 -*-
 """
 Script 1: Preparar Train y Balanceo de Fondo (50 Parches)
