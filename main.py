@@ -30,7 +30,7 @@ class FOMODetector:
     def __init__(self, model_path="models/fomo_tetragonisca_int8.lite", threshold=0.6, num_threads=1):
         self.interpreter = tflite.Interpreter(
             model_path=model_path,
-            num_threads=num_threads,   # multi-core en Pi Zero 2W: usar 4
+            num_threads=num_threads,   # multi-core en Pi 5: usar 4
         )
         self.interpreter.allocate_tensors()
 
@@ -149,7 +149,7 @@ def main():
     parser.add_argument("--max-disappeared", type=int, default=20, help="Frames tolerados sin deteccion antes de perder ID")
     parser.add_argument("--max-distance", type=int, default=250, help="Distancia euclidiana maxima (px) para mantener ID")
     parser.add_argument("--show", action="store_true", help="Mostrar ventana de OpenCV (solo PC)")
-    parser.add_argument("--num-threads", type=int, default=1, help="Hilos para inferencia TFLite (4 en Pi Zero 2W)")
+    parser.add_argument("--num-threads", type=int, default=1, help="Hilos para inferencia TFLite (4 en Pi 5)")
     parser.add_argument("--skip-frames", type=int, default=1, help="Procesar 1 de cada N frames (acelera en hardware lento)")
     parser.add_argument("--no-output", action="store_true", help="No guardar video de salida (ahorra CPU/disco en Pi)")
     parser.add_argument("--log", type=str, default=None, help="Ruta CSV para guardar log de conteo por frame")

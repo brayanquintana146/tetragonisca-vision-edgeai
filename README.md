@@ -70,7 +70,7 @@ tetragonisca-vision-edgeai/
 ├── models/                       # Artefactos exportados para inferencia local
 │   ├── fomo_tetragonisca_int8.lite # Modelo TensorFlow Lite cuantizado int8 (~53 KB)
 │   ├── labels.txt                # Archivo de etiquetas ("Abeja")
-│   └── model_tetragonisca.eim    # Binario ejecutable para Linux AARCH64 (Raspberry Pi)
+│   └── model_tetragonisca.eim    # Binario ejecutable para Linux AARCH64 (Raspberry Pi 5)
 ├── scripts/                      # Pipeline MLOps de preparación de datos
 │   ├── 01_preparar_train.py      # Limpieza de Colmena 004 e inyección de clase negativa
 │   ├── 02_copiar_valid_a_train.py # Unificación del split de validación en train
@@ -347,7 +347,7 @@ En el menú lateral de Edge Impulse Studio, ir a **Impulse Design > Create Impul
    models/fomo_tetragonisca_int8.lite   ← reemplazar con el archivo descargado
    ```
 
-#### Modelo `.eim` (Edge Impulse Linux Runner — para Raspberry Pi / Linux AARCH64)
+#### Modelo `.eim` (Edge Impulse Linux Runner — para Raspberry Pi 5 / Linux AARCH64)
 
 1. En el menú lateral, ir a **Deployment**.
 2. En la sección **Run your impulse locally**, seleccionar **Linux (AARCH64)**.

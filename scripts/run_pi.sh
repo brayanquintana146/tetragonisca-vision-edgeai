@@ -1,7 +1,7 @@
-#!/bin/bash
-# run_pi.sh — Script de arranque optimizado para Raspberry Pi Zero 2W
+ï»¿#!/bin/bash
+# run_pi.sh â€” Script de arranque optimizado para Raspberry Pi 5
 # Uso: bash scripts/run_pi.sh --video video.mp4
-# O con cámara USB: bash scripts/run_pi.sh --video /dev/video0
+# O con cÃ¡mara USB: bash scripts/run_pi.sh --video /dev/video0
 
 set -e
 
@@ -20,3 +20,4 @@ python main.py \
   --dashboard \
   --snapshot-every 300 \
   --snapshot-dir snapshots
+

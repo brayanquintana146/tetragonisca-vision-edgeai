@@ -165,7 +165,7 @@ _HTML = """<!DOCTYPE html>
     </div>
   </div>
   <div id="ts">Ultima actualizacion: &mdash;</div>
-  <footer>Tetragonisca Vision EdgeAI &middot; Pi Zero 2W</footer>
+  <footer>Tetragonisca Vision EdgeAI &middot; Pi 5</footer>
 
   <script>
     const $ = id => document.getElementById(id);

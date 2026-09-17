@@ -1,4 +1,4 @@
-# Dependencias para Raspberry Pi Zero 2W
+# Dependencias para Raspberry Pi 5
 # Instalar con: pip install -r requirements-pi.txt
 
 # Vision (sin GUI — más liviano que opencv-python)

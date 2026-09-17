@@ -1,27 +1,27 @@
-# Guía de Despliegue en Raspberry Pi (Zero 2 W y 3 Model B+)
+# Guía de Despliegue en Raspberry Pi 5
 
-Este documento detalla los pasos para configurar y desplegar el modelo en dispositivos Raspberry Pi. Está diseñado para ser aplicable tanto en la **Raspberry Pi Zero 2 W** como en la **Raspberry Pi 3 Model B+**.
+Este documento detalla los pasos para configurar y desplegar el modelo en dispositivos Raspberry Pi. Está diseñado para ser aplicable en la **Raspberry Pi 5**.
 
 ## 1. Preparación del Sistema Operativo (Flasheo de la MicroSD)
 
-Para maximizar los recursos disponibles para la inferencia del modelo (especialmente en la Zero 2 W que tiene 512MB de RAM), utilizaremos una versión sin interfaz gráfica (Headless).
+Para maximizar los recursos disponibles para la inferencia del modelo utilizaremos una versión sin interfaz gráfica (Headless).
 
 ### Pasos Iniciales
 
 1. **Abrir Raspberry Pi Imager**: Inicia el software Raspberry Pi Imager que ya tienes instalado en tu PC.
-2. **Seleccionar Dispositivo**: En "Dispositivo", puedes seleccionar "Raspberry Pi Zero 2 W" (o la 3B+ según el caso) para filtrar los sistemas operativos compatibles.
+2. **Seleccionar Dispositivo**: En "Dispositivo", puedes seleccionar "Raspberry Pi 5" para filtrar los sistemas operativos compatibles.
 3. **Seleccionar Sistema Operativo (OS)**:
    - Haz clic en **SO**.
    - Ve a **Raspberry Pi OS (other)**.
-   - Selecciona **Raspberry Pi OS Lite (64-bit)** o **(32-bit)**. 
-     - *Nota: El procesador de la Zero 2 W y la 3B+ soporta 64-bit. Se recomienda usar la versión Lite de 64-bit para mejor compatibilidad con ciertas librerías modernas de IA, a menos que el modelo específico o una librería (como versiones antiguas de tflite) exija 32-bit.*
+   - Selecciona **Raspberry Pi OS Lite (64-bit)**. 
+     - *Nota: El procesador de la Raspberry Pi 5 soporta 64-bit. Se recomienda usar la versión Lite de 64-bit para mejor compatibilidad con ciertas librerías modernas de IA.*
 4. **Seleccionar Almacenamiento**:
    - Haz clic en **Almacenamiento**.
    - Selecciona tu tarjeta MicroSD (¡Asegúrate de elegir la correcta para no borrar datos de tu PC!).
 5. **Configuración Avanzada (OS Customisation)**:
    - Haz clic en el botón de engranaje (⚙️) o en "Next" para abrir los ajustes de personalización.
    - **General**:
-     - Configura el **Nombre del equipo** (ej: `pizero` o `pi3`). En este caso el nombre será `pizero` para la Raspberry Pi Zero 2 W y `pi3` para la Raspberry Pi 3 Model B+.
+     - Configura el **Nombre del equipo** (ej: `pi5`). En este caso el nombre será `pi5` para la Raspberry Pi 5.
      - Configurar la locaclización con la capital, la zona horaria y distrubución del teclado.
      - Habilita y configura un **nombre de usuario y contraseña** (ej: usuario `pi`, y una contraseña segura). En este caso la contraseña será `sihuyromelipo`.
      - Configura la **conexión Wi-Fi**. Configuraremos una Zona de cobertura inalambrica movil. El nombre de nuestra red será `MiLaptop-Net` y la contraseña también será `sihuyromelipo`, la banda de la red será 2.4 Ghz. 
@@ -40,9 +40,9 @@ Para maximizar los recursos disponibles para la inferencia del modelo (especialm
 4. Abre una terminal en tu PC (PowerShell, CMD, o WSL) e intenta conectarte vía SSH:
    ```bash
    ssh tu_usuario@tu_hostname.local
-   # Por ejemplo: ssh pi@pizero-edge.local
+   # Por ejemplo: ssh pi@pi5.local
    ```
-    En este caso para la pi zero usaremos `ssh pi@pizero.local` y para la pi 3 model b+ usaremos `ssh pi@pi3.local`. 
+    En este caso usaremos `ssh pi@pi5.local`. 
 
    *(Si el `.local` no funciona, es posible que necesites buscar la dirección IP de la Raspberry en la configuración de tu router y usar `ssh usuario@direccion_ip`)*.
 5. Acepta la clave RSA (escribe `yes`) e ingresa tu contraseña.
@@ -86,20 +86,20 @@ mkdir ~/tetragonisca-vision-edgeai
 ### 4.2. Transferir archivos desde la PC a la Raspberry Pi
 En tu computadora, abre una **nueva terminal** (PowerShell o CMD) y asegúrate de estar en la carpeta raíz del proyecto. Ejecuta los siguientes comandos para enviar solo los archivos necesarios (evitando enviar datasets pesados como `data/` o carpetas de respaldo).
 
-*Nota: Cambia `pizero.local` por `pi3.local` si estás usando la Raspberry Pi 3.*
+*Nota: Utiliza `pi5.local`.*
 
 ```powershell
 # 1. Enviar archivos principales
-scp main.py requirements-pi.txt pi@pizero.local:~/tetragonisca-vision-edgeai/
+scp main.py requirements-pi.txt pi@pi5.local:~/tetragonisca-vision-edgeai/
 
 # 2. Enviar código fuente
-scp -r src pi@pizero.local:~/tetragonisca-vision-edgeai/
+scp -r src pi@pi5.local:~/tetragonisca-vision-edgeai/
 
 # 3. Enviar modelos
-scp -r models pi@pizero.local:~/tetragonisca-vision-edgeai/
+scp -r models pi@pi5.local:~/tetragonisca-vision-edgeai/
 
 # 4. Enviar videos de prueba
-scp -r examples pi@pizero.local:~/tetragonisca-vision-edgeai/
+scp -r examples pi@pi5.local:~/tetragonisca-vision-edgeai/
 ```
 
 ### 4.3. Instalar Dependencias
@@ -153,9 +153,9 @@ python main.py --video 0 --roi-x 320 --roi-y 240 --roi-r 100 --num-threads 4
 
 5. **Visualizar el video procesado (Opcional):** Si quieres ver gráficamente cómo la IA detectó y contó las abejas dibujando las cajas sobre el video, corre el script omitiendo el parámetro `--no-output`. Al finalizar, se generará el archivo `output_result.mp4`. Para descargarlo a tu computadora y verlo, abre una terminal de PowerShell en tu PC (dentro de la carpeta del proyecto) y ejecuta:
 ```powershell
-scp pi@pizero.local:~/tetragonisca-vision-edgeai/output_result.mp4 .
+scp pi@pi5.local:~/tetragonisca-vision-edgeai/output_result.mp4 .
 ```
-*(Reemplaza `pizero.local` por `pi5.local` o tu IP, y no olvides el punto `.` al final).*
+*(Reemplaza `pi5.local` por tu IP si es necesario, y no olvides el punto `.` al final).*
 
 ### 5.3. Apagado Seguro de la Raspberry Pi
 ⚠️ **¡Nunca desconectes el cable de energía de golpe!** Hacerlo puede corromper la memoria MicroSD y obligarte a reinstalar todo.
@@ -228,7 +228,7 @@ sudo systemctl disable bee-counter.service
 Para llevar tu proyecto de Edge AI al siguiente nivel, puedes optimizar cómo se ejecuta el modelo. Estos parámetros aplican tanto al correrlo manualmente como al editar tu servicio de sistema (`bee-counter.service`).
 
 * **Guardar un archivo CSV con el conteo:** Agrega `--log conteos.csv`. El sistema creará un archivo donde guardará el número de abejas por cada frame procesado para que luego puedas graficarlo en Excel.
-* **Aumentar la velocidad (Saltar frames):** Agrega `--skip-frames 3`. Esto hará que la Raspberry Pi procese 1 cuadro de cámara y descarte los siguientes 2. Esto triplica la velocidad de inferencia (ideal para hardware pequeño) a costa de perder un poco de precisión en el rastreo de las abejas más rápidas.
+* **Aumentar la velocidad (Saltar frames):** Agrega `--skip-frames 3`. Esto hará que la Raspberry Pi procese 1 cuadro de cámara y descarte los siguientes 2. Esto triplica la velocidad de inferencia (ideal para optimizar recursos) a costa de perder un poco de precisión en el rastreo de las abejas más rápidas.
 
 ### 7.1. Monitoreo de Hardware en Tiempo Real
 Mientras el modelo está en ejecución, es buena idea supervisar el estado de la placa (especialmente importante en una Raspberry Pi 5 sin disipador). Para esto, abre una **segunda conexión SSH** en otra ventana de tu terminal y utiliza estas herramientas:
@@ -253,15 +253,15 @@ taskset -c 0,1,2 python main.py --video 0 --no-output --num-threads 3 --skip-fra
 ```
 Este comando encierra el proceso exclusivamente en los núcleos 0, 1 y 2, liberando totalmente el núcleo número 3.
 
-## 8. Migración a Otra Placa (ej. Raspberry Pi 3 Model B+)
+## 8. Migración de Hardware
 
 El sistema operativo, las librerías de IA y todas tus configuraciones (incluyendo el servicio de autoarranque y contraseñas) residen en la tarjeta MicroSD. Esto hace que escalar o migrar el hardware sea extremadamente sencillo.
 
-Si deseas mover tu proyecto de una Raspberry Pi Zero 2W a un hardware más potente (como una Raspberry Pi 3 o 4) para obtener más cuadros por segundo y menor temperatura, sigue estos pasos físicos:
+Si deseas mover tu proyecto de una placa anterior a una Raspberry Pi 5 para obtener más cuadros por segundo y menor temperatura, sigue estos pasos físicos:
 
 1. Apaga la Pi de forma segura: `sudo shutdown -h now`.
 2. Desconecta la corriente, extrae la MicroSD y ponla en la nueva Raspberry Pi.
-3. Conéctala a la corriente. El sistema booteará idéntico, reconociendo el nuevo hardware automáticamente (mantendrá tu misma red Wi-Fi y tu mismo usuario `pi@pizero.local`).
+3. Conéctala a la corriente. El sistema booteará idéntico, reconociendo el nuevo hardware automáticamente (mantendrá tu misma red Wi-Fi y tu mismo usuario `pi@pi5.local`).
 
 ### Consideraciones sobre el Autoarranque al Migrar
 * Si tenías el servicio activado en la Pi anterior, la nueva Pi intentará arrancar la IA de inmediato.
