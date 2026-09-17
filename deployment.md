@@ -97,6 +97,9 @@ scp -r src pi@pizero.local:~/tetragonisca-vision-edgeai/
 
 # 3. Enviar modelos
 scp -r models pi@pizero.local:~/tetragonisca-vision-edgeai/
+
+# 4. Enviar videos de prueba
+scp -r examples pi@pizero.local:~/tetragonisca-vision-edgeai/
 ```
 
 ### 4.3. Instalar Dependencias
@@ -107,22 +110,61 @@ cd ~/tetragonisca-vision-edgeai
 pip install -r requirements-pi.txt
 ```
 
-## 5. Prueba de Inferencia Manual
+## 5. Conexión de la Cámara y Prueba en Vivo
 
-Antes de automatizar todo, asegúrate de que el modelo corre correctamente en la Raspberry Pi.
+Antes de automatizar el sistema, haremos una prueba real con la cámara física.
 
-1. Estando en la terminal SSH, asegúrate de tener el entorno activado (`source ~/edgeai_env/bin/activate`).
-2. Ejecuta el script principal. En la Raspberry Pi, es recomendable usar el parámetro `--no-output` (para no guardar el video procesado y ahorrar CPU y disco).
+### 5.1. Conexión Física (Apagado)
+⚠️ **¡IMPORTANTE: REQUISITO DE ENERGÍA!** 
+Al conectar una cámara y correr la IA, la Raspberry Pi 5 consumirá mucha energía (hasta 15W - 25W). Si estás dándole energía desde un puerto USB de la laptop, la placa **se apagará o reiniciará** apenas encienda la cámara.
+*   Antes de conectar la cámara, **apaga la Raspberry Pi** y conéctala a un cargador de pared oficial o de buena calidad (mínimo 5V 3A).
+
+1. **Si usas una Webcam (USB):** Simplemente conéctala a uno de los puertos USB azules (USB 3.0) de la Raspberry Pi.
+2. **Si usas la cámara oficial (CSI/MIPI):** Conecta el cable plano flexible en el puerto `CAM/DISP` de la placa, asegurándote de que los pines metálicos toquen los contactos del conector.
+
+### 5.2. Prueba de Inferencia Manual
+1. Abre una terminal (como PowerShell) en tu computadora y conéctate a la Raspberry Pi por SSH. Una vez dentro, activa el entorno virtual y entra a la carpeta del proyecto. Los comandos exactos son:
+
+```bash
+ssh pi@pi5.local
+# (Ingresa tu contraseña cuando el sistema te la pida)
+
+source ~/edgeai_env/bin/activate
+cd tetragonisca-vision-edgeai/
+```
+2. Ejecuta el script principal indicando el parámetro `--video 0` para activar la cámara en vivo. Generaremos un archivo de salida para que puedas descargarlo y verificar que el círculo se dibuja correctamente.
 
 ```bash
 # Si quieres procesar un video de prueba que subiste a la Pi:
-python main.py --video 0040-1.mp4 --no-output --num-threads 4
+python main.py --video examples/videos/0040-1.mp4 --no-output --num-threads 4
 
 
 # Si tienes una cámara conectada por USB (o la cámara oficial):
-python main.py --video 0 --no-output --num-threads 4
+# Nota: La librería de Python suele abrir las cámaras USB a una resolución baja (640x480) por defecto. 
+# Debemos centrar el círculo de cruce (ROI) matemáticamente en esa resolución (X=320, Y=240, Radio=100)
+# para que no quede dibujado por fuera de la pantalla.
+python main.py --video 0 --roi-x 320 --roi-y 240 --roi-r 100 --num-threads 4
 ```
-3. Verifica en la terminal que el modelo carga (verás un mensaje de TensorFlow Lite XNNPACK) y que se imprimen los conteos. Presiona `Ctrl+C` para detenerlo.
+3. Mientras el modelo está corriendo, puedes monitorear el esfuerzo de la placa abriendo **otra ventana de PowerShell** y conectándote por SSH (`ssh pi@pi5.local`) para usar estas herramientas:
+   * **Rendimiento (CPU y RAM):** Ejecuta `htop`. Verás barras que indican el trabajo del procesador. Presiona `q` para salir.
+   * **Temperatura:** Ejecuta `watch -n 1 vcgencmd measure_temp`. Mostrará la temperatura en vivo (ideal <80°C). Presiona `Ctrl+C` para salir.
+
+4. Verifica en la primera terminal que el modelo carga (verás un mensaje de TensorFlow Lite XNNPACK) y que se imprimen los conteos. Para **apagar la cámara y detener la IA**, simplemente presiona `Ctrl+C` en esa terminal.
+
+5. **Visualizar el video procesado (Opcional):** Si quieres ver gráficamente cómo la IA detectó y contó las abejas dibujando las cajas sobre el video, corre el script omitiendo el parámetro `--no-output`. Al finalizar, se generará el archivo `output_result.mp4`. Para descargarlo a tu computadora y verlo, abre una terminal de PowerShell en tu PC (dentro de la carpeta del proyecto) y ejecuta:
+```powershell
+scp pi@pizero.local:~/tetragonisca-vision-edgeai/output_result.mp4 .
+```
+*(Reemplaza `pizero.local` por `pi5.local` o tu IP, y no olvides el punto `.` al final).*
+
+### 5.3. Apagado Seguro de la Raspberry Pi
+⚠️ **¡Nunca desconectes el cable de energía de golpe!** Hacerlo puede corromper la memoria MicroSD y obligarte a reinstalar todo.
+
+Para apagar la Raspberry Pi de forma segura al terminar tus pruebas o demostración, ejecuta este comando en la terminal SSH:
+```bash
+sudo shutdown -h now
+```
+*(Espera unos 10 segundos a que la luz verde de la placa deje de parpadear y se apague por completo antes de desenchufarla del tomacorriente).*
 
 ## 6. Ejecución Automática al Arrancar (Autostart)
 
@@ -142,17 +184,15 @@ After=network.target
 Type=simple
 User=pi
 WorkingDirectory=/home/pi/tetragonisca-vision-edgeai
-ExecStart=/home/pi/edgeai_env/bin/python main.py --video 0040-1.mp4 --no-output --num-threads 4
+ExecStart=/home/pi/edgeai_env/bin/python main.py --video 0 --no-output --roi-x 320 --roi-y 240 --roi-r 100 --num-threads 4 --dashboard
 Restart=always
 RestartSec=10
 
-# NOTA SOBRE USO EN PRODUCCIÓN: 
-# Si bien puedes procesar videos ya grabados (ej: --video video_de_prueba.mp4), 
-# la gran ventaja de Edge AI es procesar "en vivo" conectando la cámara (--video 0) 
-# y usando el parámetro --no-output. Esto evita el desgaste de la memoria MicroSD 
-# ya que la Raspberry analiza las imágenes en memoria RAM sin guardarlas, 
-# emitiendo únicamente los conteos finales.
-# Si vas a usar cámara en vivo, cambia "--video video_de_prueba.mp4" a "--video 0".
+# NOTA SOBRE USO EN PRODUCCIÓN / DEMOSTRACIÓN: 
+# La Inteligencia Artificial arrancará procesando la cámara en vivo de forma silenciosa.
+# Al incluir el parámetro --dashboard, podrás abrir el navegador en tu laptop 
+# (estando en la misma red Wi-Fi) e ingresar a http://pi5.local:5000 
+# para ver el conteo de abejas en tiempo real. ¡Ideal para demostraciones!
 [Install]
 WantedBy=multi-user.target
 ```
@@ -190,10 +230,46 @@ Para llevar tu proyecto de Edge AI al siguiente nivel, puedes optimizar cómo se
 * **Guardar un archivo CSV con el conteo:** Agrega `--log conteos.csv`. El sistema creará un archivo donde guardará el número de abejas por cada frame procesado para que luego puedas graficarlo en Excel.
 * **Aumentar la velocidad (Saltar frames):** Agrega `--skip-frames 3`. Esto hará que la Raspberry Pi procese 1 cuadro de cámara y descarte los siguientes 2. Esto triplica la velocidad de inferencia (ideal para hardware pequeño) a costa de perder un poco de precisión en el rastreo de las abejas más rápidas.
 
-### Control Avanzado de Temperatura (Taskset)
+### 7.1. Monitoreo de Hardware en Tiempo Real
+Mientras el modelo está en ejecución, es buena idea supervisar el estado de la placa (especialmente importante en una Raspberry Pi 5 sin disipador). Para esto, abre una **segunda conexión SSH** en otra ventana de tu terminal y utiliza estas herramientas:
+
+1. **Uso de CPU y RAM (`htop`):**
+   ```bash
+   htop
+   ```
+   *Muestra un panel visual con el porcentaje de uso de los 4 núcleos del procesador y la cantidad de memoria RAM ocupada. Presiona `F10` o la letra `q` para salir.*
+
+2. **Temperatura del Procesador:**
+   ```bash
+   watch -n 1 vcgencmd measure_temp
+   ```
+   *Refresca la temperatura de la placa cada 1 segundo. Vigila que no sobrepase los 80°C para evitar que el sistema se ralentice automáticamente. Presiona `Ctrl+C` para salir.*
+
+### 7.2. Control Avanzado de Temperatura (Taskset)
 Por defecto, Linux y las librerías de IA intentarán usar todos los núcleos del procesador al mismo tiempo, lo que puede sobrecalentar la placa. Si quieres limitar la Inteligencia Artificial para que use solo 3 núcleos (dejando 1 núcleo 100% libre y frío para agregar sensores ambientales en el futuro), usa la herramienta nativa `taskset`:
 
 ```bash
 taskset -c 0,1,2 python main.py --video 0 --no-output --num-threads 3 --skip-frames 2
 ```
 Este comando encierra el proceso exclusivamente en los núcleos 0, 1 y 2, liberando totalmente el núcleo número 3.
+
+## 8. Migración a Otra Placa (ej. Raspberry Pi 3 Model B+)
+
+El sistema operativo, las librerías de IA y todas tus configuraciones (incluyendo el servicio de autoarranque y contraseñas) residen en la tarjeta MicroSD. Esto hace que escalar o migrar el hardware sea extremadamente sencillo.
+
+Si deseas mover tu proyecto de una Raspberry Pi Zero 2W a un hardware más potente (como una Raspberry Pi 3 o 4) para obtener más cuadros por segundo y menor temperatura, sigue estos pasos físicos:
+
+1. Apaga la Pi de forma segura: `sudo shutdown -h now`.
+2. Desconecta la corriente, extrae la MicroSD y ponla en la nueva Raspberry Pi.
+3. Conéctala a la corriente. El sistema booteará idéntico, reconociendo el nuevo hardware automáticamente (mantendrá tu misma red Wi-Fi y tu mismo usuario `pi@pizero.local`).
+
+### Consideraciones sobre el Autoarranque al Migrar
+* Si tenías el servicio activado en la Pi anterior, la nueva Pi intentará arrancar la IA de inmediato.
+* Si habías desactivado el servicio (`sudo systemctl disable bee-counter.service`) antes de apagar la placa anterior, la nueva Pi recordará esa configuración y **no iniciará la IA automáticamente**. Para volver a probar manualmente en la nueva placa (para ver tus FPS), simplemente entra a la carpeta, activa el entorno y corre el script:
+
+```bash
+cd ~/tetragonisca-vision-edgeai
+source ~/edgeai_env/bin/activate
+python main.py --video 0040-1.mp4 --no-output --num-threads 4
+```
+*(Si la nueva placa es más potente, puedes reducir los hilos o quitar el `--skip-frames` para máxima calidad).*

@@ -203,7 +203,7 @@ def main():
     print("TETRAGONISCA VISION EDGEAI - INFERENCIA LITERT + ROI COUNTER")
     print("=" * 60)
     print(f"Modelo TFLite : {args.model}")
-    print(f"Video Entrada : {args.video}")
+    print(f"Video Entrada : {args.video} ({width}x{height} a {fps} FPS)")
     print(f"Piquera ROI   : Centro=({args.roi_x}, {args.roi_y}), Radio={args.roi_r} px")
     print("-" * 60)
     if args.num_threads > 1:
