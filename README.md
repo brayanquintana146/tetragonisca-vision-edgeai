@@ -488,11 +488,24 @@ python main.py --video "examples/videos/0040-1.mp4" --roi-x 900 --roi-y 600 --ro
 ```
 
 ### Argumentos de Configuración:
-- `--video`: Ruta al archivo de video o cámara en vivo.
+- `--video`: Ruta al archivo de video o cámara en vivo (`0`, `/dev/video0`).
 - `--roi-x`, `--roi-y`: Coordenadas del centro geográfico de la piquera.
-- `--roi-r`: Radio en píxeles del círculo de conteo.
-- `--threshold`: Umbral de confianza mínimo de la IA (por defecto `0.55`).
+- `--roi-r`: Radio en píxeles del círculo de conteo. El tracker v2 mide todas sus distancias en múltiplos de este radio.
+- `--tracker`: `v2` (por defecto: Kalman + gating, independiente de resolución y FPS) o `v1` (EuTrack original).
+- `--threshold`: Confianza mínima para crear una abeja nueva (por defecto `0.55`).
+- `--assoc-threshold`: Confianza mínima para seguir una abeja ya rastreada (por defecto `0.35`, rescata detecciones borrosas).
+- `--cam-width`, `--cam-height`, `--cam-fps`: Resolución y FPS pedidos a la webcam.
+- `--events`: CSV con cada evento IN/OUT (tiempo, ID, posición).
 - `--show`: Muestra la ventana visual de OpenCV con rastreos interpolados.
+
+### Banco de Pruebas del Tracker (`bench/`)
+Para medir cambios del tracker sin la Raspberry Pi, `bench/make_scenarios.py` cachea las detecciones de FOMO del video `0040-1.mp4` en varios escenarios, entre ellos una simulación de webcam 640x480 filmando un monitor (keystone, desenfoque, ruido, JPEG, exposición larga). Luego `bench/run_bench.py` compara v1 y v2 contra la referencia de campo (42 IN / 42 OUT):
+
+```powershell
+python bench/make_scenarios.py --video examples/videos/0040-1.mp4 --out bench/cache   # ~5 min, una sola vez
+python bench/run_bench.py --cache bench/cache                                          # segundos
+python test_tracker_v2.py                                                              # pruebas sintéticas
+```
 
 ### Precisión del Algoritmo (Prueba de Rendimiento)
 Las calibraciones realizadas sobre secuencias biológicas reales confirmadas de forma manual por investigadores han arrojado los siguientes promedios de exactitud en situaciones de vuelo de alto tránsito:

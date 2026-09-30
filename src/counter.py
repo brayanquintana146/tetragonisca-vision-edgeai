@@ -107,3 +107,102 @@ class BeeCounter:
                         self.counted.add(object_id)
 
         return {"in": self.in_count, "out": self.out_count}
+
+
+# =============================================================================
+# Contador v2: origen-destino + cruce directo con histéresis
+# =============================================================================
+
+class BeeCounterV2:
+    """
+    Cuenta entradas/salidas usando el recorrido completo de cada track,
+    no solo los dos últimos puntos.
+
+    Regla origen-destino:
+      - OUT: el track nació DENTRO de la ROI y terminó FUERA.
+      - IN : el track nació FUERA de la ROI y terminó DENTRO.
+      - Nació y terminó del mismo lado (guardianas, abejas que revolotean): no cuenta.
+
+    Se evalúa en dos momentos:
+      1. En vivo: cuando un track confirmado sale de la banda de histéresis
+         hacia el lado opuesto a su origen, se cuenta al instante (HUD en tiempo real).
+      2. Al cerrarse el track: si no se contó en vivo, su última posición se
+         proyecta con la velocidad del Kalman durante `lookahead_s`. Cubre las
+         abejas que despegan y FOMO deja de ver (desenfoque) antes del borde.
+         Con `back_project=True` se hace lo simétrico con el nacimiento
+         (abejas que aterrizan y FOMO solo detecta ya dentro de la ROI).
+
+    Cada track cuenta como máximo una vez. Distancias en fracciones del radio
+    y velocidades en radios/s: no depende de la resolución ni de los FPS.
+    """
+
+    def __init__(self, roi_center, roi_radius, hysteresis=0.15, lookahead_s=0.25,
+                 min_speed=1.5, back_project=True):
+        """
+        hysteresis:   banda alrededor del borde para el conteo en vivo.
+                      Dentro = d < r(1-h); Fuera = d > r(1+h).
+        lookahead_s:  segundos que se proyecta un track al cerrarse.
+        min_speed:    velocidad mínima (radios/s) para confiar en la proyección.
+        back_project: proyectar también hacia atrás el nacimiento del track.
+        """
+        self.c = np.array(roi_center, dtype=float)
+        self.r = float(roi_radius)
+        self.r_in = self.r * (1 - hysteresis)
+        self.r_out = self.r * (1 + hysteresis)
+        self.lookahead_s = lookahead_s
+        self.min_speed = min_speed * self.r
+        self.back_project = back_project
+        self.in_count = 0
+        self.out_count = 0
+        self.counted = set()   # IDs contados (compatibilidad con v1)
+        self.events = []       # (t, "in"/"out", track_id, x, y)
+
+    def _d(self, p):
+        return float(np.linalg.norm(np.asarray(p, dtype=float) - self.c))
+
+    def _origin(self, tr):
+        if self._d(tr.birth_pos) >= self.r:
+            return "outside"
+        v = tr.early_vel
+        if self.back_project and v is not None and np.linalg.norm(v) >= self.min_speed:
+            if self._d(tr.birth_pos - v * self.lookahead_s) >= self.r:
+                return "outside"
+        return "inside"
+
+    def _destination(self, tr):
+        end = tr.last_hit_pos
+        if np.linalg.norm(tr.vel) >= self.min_speed:
+            end = end + tr.vel * self.lookahead_s
+        return "outside" if self._d(end) >= self.r else "inside"
+
+    def _register(self, tr, kind):
+        tr.counted = kind
+        self.counted.add(tr.id)
+        self.events.append((tr.t_last_hit, kind, tr.id, float(tr.last_hit_pos[0]), float(tr.last_hit_pos[1])))
+        if kind == "in":
+            self.in_count += 1
+        else:
+            self.out_count += 1
+
+    def update(self, active_tracks, finished_tracks=()):
+        # 1. Conteo en vivo al salir de la banda de histéresis
+        for tr in active_tracks:
+            if tr.counted:
+                continue
+            d = self._d(tr.last_hit_pos)
+            if d > self.r_out and self._origin(tr) == "inside":
+                self._register(tr, "out")
+            elif d < self.r_in and self._origin(tr) == "outside":
+                self._register(tr, "in")
+
+        # 2. Tracks cerrados: origen-destino con proyección
+        for tr in finished_tracks:
+            if tr.counted:
+                continue
+            o, dst = self._origin(tr), self._destination(tr)
+            if o == "inside" and dst == "outside":
+                self._register(tr, "out")
+            elif o == "outside" and dst == "inside":
+                self._register(tr, "in")
+
+        return {"in": self.in_count, "out": self.out_count}

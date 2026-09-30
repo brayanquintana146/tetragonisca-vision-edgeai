@@ -163,3 +163,209 @@ class EuTrack:
                 self.register(input_centroids[col])
 
         return self.objects, deregistered
+
+
+# =============================================================================
+# Tracker v2: Kalman de velocidad constante + Húngaro con gating
+# =============================================================================
+
+class Track:
+    """Estado de una abeja rastreada."""
+
+    __slots__ = ("id", "x", "P", "confirmed", "n_hits", "t_first", "t_last_hit",
+                 "birth_pos", "last_hit_pos", "hits", "misses", "counted", "early_vel")
+
+    def __init__(self, tid, pos, t, P0):
+        self.id = tid
+        self.x = np.array([pos[0], pos[1], 0.0, 0.0])   # [x, y, vx, vy] (px, px/s)
+        self.P = P0.copy()
+        self.confirmed = False
+        self.n_hits = 1
+        self.t_first = t
+        self.t_last_hit = t
+        self.birth_pos = np.array(pos[:2], dtype=float)
+        self.last_hit_pos = np.array(pos[:2], dtype=float)
+        self.hits = [(t, float(pos[0]), float(pos[1]))]   # detecciones reales asociadas
+        self.misses = 0
+        self.counted = None      # None | "in" | "out" (lo escribe el contador)
+        self.early_vel = None    # velocidad estimada al confirmarse (px/s)
+
+    @property
+    def pos(self):
+        return self.x[:2]
+
+    @property
+    def vel(self):
+        return self.x[2:]
+
+
+class BeeTracker:
+    """
+    Rastreador multi-abeja independiente de la resolución y de los FPS.
+
+    Diferencias con EuTrack:
+    - Usa el tiempo real entre frames (dt en segundos): funciona igual a 60 fps
+      que a 8 fps o con frames perdidos por la webcam.
+    - Todas las distancias se expresan en múltiplos de `scale` (el radio de la
+      ROI en px), así que los mismos parámetros sirven en 1920x1080 y en 640x480.
+    - Filtro de Kalman de velocidad constante: predice sin el retraso del
+      suavizado exponencial y su incertidumbre crece mientras la abeja no se ve.
+    - Gating ANTES del Algoritmo Húngaro: pares imposibles nunca compiten.
+    - Tracks tentativos: una detección aislada (reflejo, ruido del monitor) no
+      crea un ID definitivo hasta confirmarse con `min_hits` detecciones.
+    - Doble umbral (estilo ByteTrack): detecciones débiles (blur) pueden
+      continuar un track existente, pero solo las fuertes crean tracks nuevos.
+    """
+
+    def __init__(self, scale, accel_std=40.0, meas_std=0.08, init_vel_std=4.0,
+                 gate_sigma=3.0, min_gate=0.35, max_gate=1.2,
+                 max_lost_s=0.6, tentative_lost_s=0.1, min_hits=2,
+                 birth_min_prob=0.55, max_hits_kept=60):
+        """
+        scale:            px que equivalen a 1 unidad (radio de la ROI).
+        accel_std:        aceleración típica de una abeja (unidades/s²). Alto = reacciona rápido.
+        meas_std:         error de posición de FOMO (unidades). La grilla 40x40 da ~0.08.
+        init_vel_std:     incertidumbre de velocidad de un track recién nacido (unidades/s).
+        gate_sigma:       ventana de asociación en desviaciones estándar de la predicción.
+        min_gate/max_gate: límites de esa ventana (unidades).
+        max_lost_s:       segundos sin detección antes de cerrar un track confirmado.
+        tentative_lost_s: ídem para tracks tentativos.
+        min_hits:         detecciones necesarias para confirmar un track.
+        birth_min_prob:   confianza mínima para crear un track nuevo.
+        """
+        s = float(scale)
+        self.scale = s
+        self.q = accel_std * s
+        self.r = meas_std * s
+        self.P0 = np.diag([self.r ** 2, self.r ** 2, (init_vel_std * s) ** 2, (init_vel_std * s) ** 2])
+        self.R = np.eye(2) * self.r ** 2
+        self.H = np.array([[1.0, 0, 0, 0], [0, 1.0, 0, 0]])
+        self.gate_sigma = gate_sigma
+        self.min_gate = min_gate * s
+        self.max_gate = max_gate * s
+        self.max_lost_s = max_lost_s
+        self.tentative_lost_s = tentative_lost_s
+        self.min_hits = min_hits
+        self.birth_min_prob = birth_min_prob
+        self.max_hits_kept = max_hits_kept
+
+        self.tracks = OrderedDict()   # {id: Track}
+        self.next_id = 0              # IDs internos (incluye tentativos)
+        self.confirmed_total = 0      # abejas únicas confirmadas
+        self._next_public_id = 0
+        self.t_prev = None
+
+    # ------------------------------------------------------------------ Kalman
+    def _F_Q(self, dt):
+        F = np.eye(4)
+        F[0, 2] = F[1, 3] = dt
+        q2 = self.q ** 2
+        dt2, dt3, dt4 = dt * dt, dt ** 3, dt ** 4
+        Q = q2 * np.array([[dt4 / 4, 0, dt3 / 2, 0],
+                           [0, dt4 / 4, 0, dt3 / 2],
+                           [dt3 / 2, 0, dt2, 0],
+                           [0, dt3 / 2, 0, dt2]])
+        return F, Q
+
+    def _predict(self, tr, F, Q):
+        tr.x = F @ tr.x
+        tr.P = F @ tr.P @ F.T + Q
+
+    def _correct(self, tr, z):
+        y = z - self.H @ tr.x
+        S = self.H @ tr.P @ self.H.T + self.R
+        K = tr.P @ self.H.T @ np.linalg.inv(S)
+        tr.x = tr.x + K @ y
+        tr.P = (np.eye(4) - K @ self.H) @ tr.P
+
+    def _gate(self, tr):
+        S = tr.P[:2, :2] + self.R
+        sigma = np.sqrt(np.max(np.linalg.eigvalsh(S)))
+        return float(np.clip(self.gate_sigma * sigma, self.min_gate, self.max_gate))
+
+    # ------------------------------------------------------------------ API
+    def update(self, detections, t):
+        """
+        detections: lista de (cx, cy) o (cx, cy, prob) en px.
+        t:          timestamp del frame en segundos (tiempo de captura).
+        Devuelve (tracks_confirmados_activos, tracks_confirmados_terminados).
+        """
+        dt = 0.0 if self.t_prev is None else max(1e-3, t - self.t_prev)
+        self.t_prev = t
+        dets = [(float(d[0]), float(d[1]), float(d[2]) if len(d) > 2 else 1.0) for d in detections]
+
+        # 1. Predicción
+        F, Q = self._F_Q(dt)
+        tids = list(self.tracks.keys())
+        for tid in tids:
+            self._predict(self.tracks[tid], F, Q)
+
+        # 2. Asociación global con gating previo
+        matched_t, matched_d = set(), set()
+        if tids and dets:
+            pred = np.array([self.tracks[tid].pos for tid in tids])
+            Z = np.array([d[:2] for d in dets])
+            D = dist.cdist(pred, Z)
+            BIG = 1e9
+            C = D.copy()
+            for i, tid in enumerate(tids):
+                tr = self.tracks[tid]
+                C[i, D[i] > self._gate(tr)] = BIG
+                if not tr.confirmed:
+                    C[i] += 0.1 * self.scale   # los confirmados tienen prioridad
+            rows, cols = linear_sum_assignment(C)
+            for r_, c_ in zip(rows, cols):
+                if C[r_, c_] >= BIG:
+                    continue
+                tr = self.tracks[tids[r_]]
+                z = Z[c_]
+                self._correct(tr, z)
+                tr.n_hits += 1
+                tr.misses = 0
+                tr.t_last_hit = t
+                tr.last_hit_pos = z.copy()
+                tr.hits.append((t, float(z[0]), float(z[1])))
+                if len(tr.hits) > self.max_hits_kept:
+                    del tr.hits[0]
+                if tr.early_vel is None and tr.n_hits >= 3:
+                    tr.early_vel = tr.vel.copy()
+                if not tr.confirmed and tr.n_hits >= self.min_hits:
+                    tr.confirmed = True
+                    self.confirmed_total += 1
+                matched_t.add(tids[r_])
+                matched_d.add(c_)
+
+        # 3. Tracks sin detección: envejecen y se cierran por tiempo
+        finished = []
+        for tid in tids:
+            if tid in matched_t:
+                continue
+            tr = self.tracks[tid]
+            tr.misses += 1
+            limit = self.max_lost_s if tr.confirmed else self.tentative_lost_s
+            if t - tr.t_last_hit > limit:
+                del self.tracks[tid]
+                if tr.confirmed:
+                    finished.append(tr)
+
+        # 4. Detecciones fuertes sin asignar: tracks tentativos nuevos
+        for j, d in enumerate(dets):
+            if j in matched_d or d[2] < self.birth_min_prob:
+                continue
+            self.tracks[self.next_id] = Track(self.next_id, d, t, self.P0)
+            self.next_id += 1
+
+        active = [tr for tr in self.tracks.values() if tr.confirmed]
+        return active, finished
+
+    def flush(self):
+        """Cierra todos los tracks (fin del video). Devuelve los confirmados."""
+        done = [tr for tr in self.tracks.values() if tr.confirmed]
+        self.tracks.clear()
+        return done
+
+    # Compatibilidad con el dibujado de main.py
+    @property
+    def trajectories(self):
+        return OrderedDict((tr.id, [(int(x), int(y)) for _, x, y in tr.hits])
+                           for tr in self.tracks.values() if tr.confirmed)

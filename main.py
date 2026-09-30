@@ -2,6 +2,7 @@ import argparse
 import csv
 import os
 import sys
+import threading
 import time
 import cv2
 import numpy as np
@@ -14,12 +15,56 @@ except ImportError:
         # pyrefly: ignore [missing-import]
         import tflite_runtime.interpreter as tflite
     except ImportError:
+        # Windows/PC: LiteRT y tflite_runtime no tienen ruedas para Windows; se usa TensorFlow
         # pyrefly: ignore [missing-import]
-        import tensorflow.lite as tflite
+        import tensorflow as _tf
+        tflite = _tf.lite
 
-from src.counter import BeeCounter
-from src.tracker import EuTrack
+from src.counter import BeeCounter, BeeCounterV2
+from src.tracker import EuTrack, BeeTracker
+from src.detection import cluster_centroids
 from src.dashboard import Dashboard
+
+
+class LatestFrameReader:
+    """
+    Lee la cámara en un hilo aparte y guarda solo el frame más reciente.
+
+    Sin esto, cv2.VideoCapture entrega frames viejos del buffer cuando la
+    inferencia es más lenta que la cámara: el tracker recibe imágenes con
+    retraso y huecos de tiempo irregulares.
+    """
+
+    def __init__(self, cap):
+        self.cap = cap
+        self.lock = threading.Lock()
+        self.frame, self.t, self.seq = None, None, 0
+        self.running = True
+        self.thread = threading.Thread(target=self._loop, daemon=True)
+        self.thread.start()
+
+    def _loop(self):
+        while self.running:
+            ok, f = self.cap.read()
+            t = time.monotonic()
+            if not ok:
+                self.running = False
+                break
+            with self.lock:
+                self.frame, self.t, self.seq = f, t, self.seq + 1
+
+    def read(self, last_seq):
+        """Espera un frame más nuevo que last_seq. Devuelve (ok, frame, t, seq)."""
+        while self.running or self.seq > last_seq:
+            with self.lock:
+                if self.seq > last_seq:
+                    return True, self.frame, self.t, self.seq
+            time.sleep(0.001)
+        return False, None, None, last_seq
+
+    def stop(self):
+        self.running = False
+        self.thread.join(timeout=1.0)
 
 
 class FOMODetector:
@@ -43,6 +88,11 @@ class FOMODetector:
         self.threshold = threshold
 
     def detect(self, frame):
+        """Centroides agrupados con el método v1 (radio fijo de 60 px)."""
+        return self._cluster_centroids(self.detect_raw(frame))
+
+    def detect_raw(self, frame):
+        """Celdas de FOMO sobre el umbral: lista de (cx, cy, prob) en px del frame."""
         frame_h, frame_w = frame.shape[:2]
 
         # 1. Preprocesamiento: Redimensionar y convertir BGR a RGB
@@ -76,9 +126,7 @@ class FOMODetector:
                         cy = int((y + 0.5) * (frame_h / grid_h))
                         raw_centroids.append((cx, cy, prob))
 
-        # 5. Agrupar detecciones cercanas (NMS por distancia) para evitar
-        #    que una misma abeja genere múltiples centroides en celdas vecinas
-        return self._cluster_centroids(raw_centroids)
+        return raw_centroids
 
     @staticmethod
     def _cluster_centroids(raw_centroids, merge_radius=60):
@@ -145,9 +193,18 @@ def main():
     parser.add_argument("--roi-x", type=int, default=900, help="Centro X de la piquera")
     parser.add_argument("--roi-y", type=int, default=640, help="Centro Y de la piquera")
     parser.add_argument("--roi-r", type=int, default=200, help="Radio de la piquera en px")
-    parser.add_argument("--threshold", type=float, default=0.55, help="Umbral de confianza FOMO")
-    parser.add_argument("--max-disappeared", type=int, default=20, help="Frames tolerados sin deteccion antes de perder ID")
-    parser.add_argument("--max-distance", type=int, default=250, help="Distancia euclidiana maxima (px) para mantener ID")
+    parser.add_argument("--tracker", choices=["v2", "v1"], default="v2",
+                        help="v2: Kalman + gating, independiente de resolución y FPS (defecto). v1: EuTrack original")
+    parser.add_argument("--threshold", type=float, default=0.55, help="Umbral de confianza FOMO (v2: para crear abejas nuevas)")
+    parser.add_argument("--assoc-threshold", type=float, default=0.35,
+                        help="v2: umbral menor para seguir abejas ya rastreadas (detecciones borrosas)")
+    parser.add_argument("--max-lost", type=float, default=0.6, help="v2: segundos sin detección antes de cerrar un track")
+    parser.add_argument("--max-disappeared", type=int, default=20, help="v1: frames tolerados sin deteccion antes de perder ID")
+    parser.add_argument("--max-distance", type=int, default=250, help="v1: distancia euclidiana maxima (px) para mantener ID")
+    parser.add_argument("--cam-width", type=int, default=0, help="Ancho pedido a la cámara (0 = por defecto del driver)")
+    parser.add_argument("--cam-height", type=int, default=0, help="Alto pedido a la cámara")
+    parser.add_argument("--cam-fps", type=int, default=0, help="FPS pedidos a la cámara")
+    parser.add_argument("--events", type=str, default=None, help="v2: CSV con cada evento IN/OUT (tiempo, id, posición)")
     parser.add_argument("--show", action="store_true", help="Mostrar ventana de OpenCV (solo PC)")
     parser.add_argument("--num-threads", type=int, default=1, help="Hilos para inferencia TFLite (4 en Pi 5)")
     parser.add_argument("--skip-frames", type=int, default=1, help="Procesar 1 de cada N frames (acelera en hardware lento)")
@@ -159,18 +216,43 @@ def main():
 
     args = parser.parse_args()
 
-    # Inicializar detector FOMO con LiteRT
-    detector = FOMODetector(model_path=args.model, threshold=args.threshold, num_threads=args.num_threads)
+    use_v2 = args.tracker == "v2"
 
+    # Inicializar detector FOMO con LiteRT (v2 usa un umbral bajo y filtra después)
+    det_threshold = min(args.threshold, args.assoc_threshold) if use_v2 else args.threshold
+    detector = FOMODetector(model_path=args.model, threshold=det_threshold, num_threads=args.num_threads)
+
+    is_camera = args.video.isdigit() or args.video.startswith("/dev/video")
     video_source = int(args.video) if args.video.isdigit() else args.video
     cap = cv2.VideoCapture(video_source)
     if not cap.isOpened():
         print(f"Error: No se pudo abrir el video '{args.video}'.")
         sys.exit(1)
 
+    if is_camera:
+        # MJPG permite 30 fps a resoluciones altas por USB en webcams Logitech
+        cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
+        if args.cam_width and args.cam_height:
+            cap.set(cv2.CAP_PROP_FRAME_WIDTH, args.cam_width)
+            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, args.cam_height)
+        if args.cam_fps:
+            cap.set(cv2.CAP_PROP_FPS, args.cam_fps)
+        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+
+    # La ROI tiene que caber completa en el frame; si no, el conteo falla en silencio
+    if (args.roi_x - args.roi_r < 0 or args.roi_y - args.roi_r < 0
+            or args.roi_x + args.roi_r > width or args.roi_y + args.roi_r > height):
+        print(f"[AVISO] La ROI (centro=({args.roi_x},{args.roi_y}), r={args.roi_r}) se sale del "
+              f"frame {width}x{height}. Revisa --roi-x/--roi-y/--roi-r para esta resolución.")
+
+    if is_camera and args.skip_frames > 1:
+        print("[AVISO] --skip-frames con cámara en vivo reduce los FPS efectivos del tracker. "
+              "Con cámara se procesa siempre el frame más reciente; se ignora --skip-frames.")
+        args.skip_frames = 1
 
     if not args.no_output:
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
@@ -178,8 +260,21 @@ def main():
     else:
         out = None
 
-    tracker = EuTrack(max_disappeared=args.max_disappeared, max_distance=args.max_distance)
-    counter = BeeCounter(roi_center=(args.roi_x, args.roi_y), roi_radius=args.roi_r)
+    if use_v2:
+        # Todas las distancias del tracker v2 se miden en radios de la ROI
+        tracker = BeeTracker(scale=args.roi_r, max_lost_s=args.max_lost, birth_min_prob=args.threshold)
+        counter = BeeCounterV2(roi_center=(args.roi_x, args.roi_y), roi_radius=args.roi_r)
+    else:
+        tracker = EuTrack(max_disappeared=args.max_disappeared, max_distance=args.max_distance)
+        counter = BeeCounter(roi_center=(args.roi_x, args.roi_y), roi_radius=args.roi_r)
+
+    events_file = None
+    events_writer = None
+    n_events_written = 0
+    if args.events and use_v2:
+        events_file = open(args.events, "w", newline="", encoding="utf-8")
+        events_writer = csv.writer(events_file)
+        events_writer.writerow(["t_s", "evento", "id", "x", "y"])
 
     # Dashboard web (opcional)
     dashboard = None
@@ -205,6 +300,7 @@ def main():
     print(f"Modelo TFLite : {args.model}")
     print(f"Video Entrada : {args.video} ({width}x{height} a {fps} FPS)")
     print(f"Piquera ROI   : Centro=({args.roi_x}, {args.roi_y}), Radio={args.roi_r} px")
+    print(f"Tracker       : {'v2 (Kalman + gating, tiempo real)' if use_v2 else 'v1 (EuTrack)'}")
     print("-" * 60)
     if args.num_threads > 1:
         print(f"Hilos TFLite  : {args.num_threads} (multi-core)")
@@ -227,10 +323,24 @@ def main():
         cv2.namedWindow(win_name, cv2.WINDOW_NORMAL)
         cv2.resizeWindow(win_name, min(width, 1280), min(height, 720))
 
+    reader = LatestFrameReader(cap) if is_camera else None
+    last_seq = 0
+    t_start_cam = None
+    counts = {"in": 0, "out": 0}
+
     while True:
-        ret, frame = cap.read()
-        if not ret:
-            break
+        if reader is not None:
+            ret, frame, t_cap, last_seq = reader.read(last_seq)
+            if not ret:
+                break
+            if t_start_cam is None:
+                t_start_cam = t_cap
+            t_frame = t_cap - t_start_cam          # tiempo real de captura
+        else:
+            ret, frame = cap.read()
+            if not ret:
+                break
+            t_frame = frame_idx / fps              # tiempo del video
 
         frame_idx += 1
 
@@ -243,14 +353,27 @@ def main():
         t0 = time.perf_counter()
         processed_frames += 1
 
-        # 1. Inferencia real con FOMO
-        centroids = detector.detect(frame)
+        if use_v2:
+            # 1. Inferencia FOMO + agrupación relativa al tamaño de la ROI
+            centroids = cluster_centroids(detector.detect_raw(frame), merge_radius=0.25 * args.roi_r)
+            # 2. Tracking con el tiempo real del frame
+            active, finished = tracker.update(centroids, t_frame)
+            # 3. Conteo origen-destino
+            counts = counter.update(active, finished)
+            objects = {tr.id: tr.pos for tr in active if tr.misses <= 2}
+            if events_writer is not None:
+                for ev in counter.events[n_events_written:]:
+                    events_writer.writerow([round(ev[0], 3), ev[1], ev[2], int(ev[3]), int(ev[4])])
+                n_events_written = len(counter.events)
+        else:
+            # 1. Inferencia real con FOMO
+            centroids = detector.detect(frame)
+            # 2. Tracking de centroides (EuTrack)
+            objects, deregistered = tracker.update(centroids)
+            # 3. Conteo en la ROI de la piquera (BeeCounter)
+            counts = counter.update(objects, tracker.trajectories, deregistered=deregistered)
 
-        # 2. Tracking de centroides (EuTrack)
-        objects, deregistered = tracker.update(centroids)
-
-        # 3. Conteo en la ROI de la piquera (BeeCounter)
-        counts = counter.update(objects, tracker.trajectories, deregistered=deregistered)
+        total_ids = tracker.confirmed_total if use_v2 else tracker.next_object_id
 
         # Calcular si necesitamos renderizar el frame
         # (solo cuando hay que mostrarlo, guardarlo en video o hacer snapshot)
@@ -264,9 +387,10 @@ def main():
             cv2.circle(frame, (args.roi_x, args.roi_y), 4, (0, 255, 255), -1)
 
             # Dibujar centroides, IDs y trayectorias (solo objetos activamente detectados)
+            trails = tracker.trajectories
             for object_id, centroid in objects.items():
                 # No dibujar objetos "fantasma" que ya no están siendo detectados
-                if tracker.disappeared.get(object_id, 0) > 2:
+                if not use_v2 and tracker.disappeared.get(object_id, 0) > 2:
                     continue
 
                 cx, cy = int(centroid[0]), int(centroid[1])
@@ -284,8 +408,8 @@ def main():
                 )
 
                 # Trayectoria como puntos que se desvanecen
-                if object_id in tracker.trajectories:
-                    trail = tracker.trajectories[object_id]
+                if object_id in trails:
+                    trail = trails[object_id]
                     n = len(trail)
                     for i, pt in enumerate(trail):
                         # Opacidad: los puntos más recientes son más visibles
@@ -332,7 +456,7 @@ def main():
             )
             cv2.putText(
                 frame,
-                f"Total Abejas  : {tracker.next_object_id}",
+                f"Total Abejas  : {total_ids}",
                 (20, 116),
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.6,
@@ -360,7 +484,7 @@ def main():
                 frame_idx,
                 round(t_now, 3),
                 counts['in'], counts['out'],
-                tracker.next_object_id,
+                total_ids,
                 round(fps_proc, 2),
             ])
 
@@ -369,7 +493,7 @@ def main():
             dashboard.update(
                 in_count=counts['in'],
                 out_count=counts['out'],
-                total=tracker.next_object_id,
+                total=total_ids,
                 frame=frame_idx,
                 fps_proc=fps_proc,
             )
@@ -386,6 +510,21 @@ def main():
             cv2.imshow("Tetragonisca Vision - Inferencia y Conteo", frame)
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
+
+    if reader is not None:
+        reader.stop()
+
+    # Cerrar los tracks abiertos al terminar (conteo de las abejas del último instante)
+    if use_v2:
+        counts = counter.update([], tracker.flush())
+        total_ids = tracker.confirmed_total
+        if events_writer is not None:
+            for ev in counter.events[n_events_written:]:
+                events_writer.writerow([round(ev[0], 3), ev[1], ev[2], int(ev[3]), int(ev[4])])
+    else:
+        total_ids = tracker.next_object_id
+    if events_file is not None:
+        events_file.close()
 
     cap.release()
     if out is not None:
@@ -411,11 +550,11 @@ def main():
     print(f" Total Cuadros (Video)     : {frame_idx}")
     print(f" Cuadros Procesados (IA)   : {processed_frames}")
     print("-" * 60)
-    print(f" Identidades Únicas        : {tracker.next_object_id}")
+    print(f" Identidades Únicas        : {total_ids}")
     print(f" Entradas (IN)             : {counts['in']}")
     print(f" Salidas (OUT)             : {counts['out']}")
     print("=" * 60)
 
 
 if __name__ == "__main__":
-    main()
+    main()

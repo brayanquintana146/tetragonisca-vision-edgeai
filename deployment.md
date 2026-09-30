@@ -140,11 +140,22 @@ python main.py --video examples/videos/0040-1.mp4 --no-output --num-threads 4
 
 
 # Si tienes una cámara conectada por USB (o la cámara oficial):
-# Nota: La librería de Python suele abrir las cámaras USB a una resolución baja (640x480) por defecto. 
-# Debemos centrar el círculo de cruce (ROI) matemáticamente en esa resolución (X=320, Y=240, Radio=100)
-# para que no quede dibujado por fuera de la pantalla.
-python main.py --video 0 --roi-x 320 --roi-y 240 --roi-r 100 --num-threads 4
+# Se pide explícitamente 640x480 a 30 fps. La ROI (--roi-x, --roi-y, --roi-r) va en píxeles
+# de ESA resolución y debe rodear la piquera tal como aparece en la imagen de la cámara
+# (no necesariamente el centro de la pantalla). Si el círculo se sale del frame, el script avisa.
+python main.py --video 0 --cam-width 640 --cam-height 480 --cam-fps 30 \
+  --roi-x 320 --roi-y 240 --roi-r 100 --num-threads 4 --snapshot-every 150
 ```
+
+> **Calibrar la ROI con la cámara:** corre una vez con `--snapshot-every 150` y revisa las imágenes de `snapshots/`. El círculo amarillo debe cubrir la piquera con un margen de ~1 cuerpo de abeja. El tracker v2 mide todas sus distancias en radios de la ROI, así que un radio mal puesto afecta el conteo.
+
+> **Ajustes de la webcam (Logitech C930e u otra UVC):** en poca luz la cámara alarga la exposición y baja a ~15 fps, y las abejas en vuelo salen borrosas (justo las salidas). Fija la exposición y apaga el autofoco, que "busca" constantemente sobre una pantalla. Los nombres de los controles cambian según el kernel: consulta primero `v4l2-ctl -d /dev/video0 --list-ctrls`. En Raspberry Pi OS Bookworm suelen ser:
+> ```bash
+> sudo apt install v4l-utils
+> v4l2-ctl -d /dev/video0 -c auto_exposure=1 -c exposure_time_absolute=100 -c exposure_dynamic_framerate=0
+> v4l2-ctl -d /dev/video0 -c focus_automatic_continuous=0 -c focus_absolute=0
+> ```
+> (`exposure_time_absolute` va en unidades de 100 µs: 100 = 10 ms. Súbelo si la imagen queda oscura.)
 3. Mientras el modelo está corriendo, puedes monitorear el esfuerzo de la placa abriendo **otra ventana de PowerShell** y conectándote por SSH (`ssh pi@pi5.local`) para usar estas herramientas:
    * **Rendimiento (CPU y RAM):** Ejecuta `htop`. Verás barras que indican el trabajo del procesador. Presiona `q` para salir.
    * **Temperatura:** Ejecuta `watch -n 1 vcgencmd measure_temp`. Mostrará la temperatura en vivo (ideal <80°C). Presiona `Ctrl+C` para salir.
@@ -228,7 +239,8 @@ sudo systemctl disable bee-counter.service
 Para llevar tu proyecto de Edge AI al siguiente nivel, puedes optimizar cómo se ejecuta el modelo. Estos parámetros aplican tanto al correrlo manualmente como al editar tu servicio de sistema (`bee-counter.service`).
 
 * **Guardar un archivo CSV con el conteo:** Agrega `--log conteos.csv`. El sistema creará un archivo donde guardará el número de abejas por cada frame procesado para que luego puedas graficarlo en Excel.
-* **Aumentar la velocidad (Saltar frames):** Agrega `--skip-frames 3`. Esto hará que la Raspberry Pi procese 1 cuadro de cámara y descarte los siguientes 2. Esto triplica la velocidad de inferencia (ideal para optimizar recursos) a costa de perder un poco de precisión en el rastreo de las abejas más rápidas.
+* **Aumentar la velocidad (Saltar frames):** Agrega `--skip-frames 3` al procesar **archivos de video**: la Raspberry Pi procesa 1 cuadro y descarta los 2 siguientes. Con **cámara en vivo** este parámetro se ignora: el programa lee la cámara en un hilo aparte y siempre procesa el frame más reciente, así que ya va a la máxima velocidad posible sin acumular retraso. Para contar bien las salidas conviene procesar **al menos ~15 fps efectivos** (revisa la línea `FPS:` de la consola).
+* **Registrar cada entrada/salida:** Agrega `--events eventos.csv` (tracker v2). Guarda una fila por evento con el tiempo, el ID y la posición, útil para validar el conteo contra el video.
 
 ### 7.1. Monitoreo de Hardware en Tiempo Real
 Mientras el modelo está en ejecución, es buena idea supervisar el estado de la placa (especialmente importante en una Raspberry Pi 5 sin disipador). Para esto, abre una **segunda conexión SSH** en otra ventana de tu terminal y utiliza estas herramientas:
