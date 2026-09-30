@@ -3,7 +3,10 @@ Banco de pruebas de tracking + conteo sobre detecciones FOMO cacheadas.
 
 Compara el pipeline v1 (EuTrack + BeeCounter) y v2 (BeeTracker + BeeCounterV2)
 en escenarios que simulan distintas condiciones de captura, contra la
-referencia de campo del video 0040-1 (Leocádio et al., filtro RD): 42 IN / 42 OUT.
+conteo agregado de referencia del video 0040-1: fila 'Pseudo' de la Tabla 1 de
+Leocádio et al. (42 IN / 85 OUT; conteo humano asistido, probablemente incluye
+cruces de guardianas). Es solo orientativo: la evaluación de exactitud se hace
+evento por evento con bench/compare_events.py contra una anotación manual.
 
 Uso: python bench/run_bench.py --cache bench/cache/
 """
@@ -11,7 +14,7 @@ import argparse, os, sys
 import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-GT_IN, GT_OUT = 42, 42
+GT_IN, GT_OUT = 42, 85   # 'Pseudo', Tabla 1 del paper (orientativo)
 
 # (nombre, archivo cache, procesar 1 de cada N frames, fracción de frames perdidos al azar)
 SCENARIOS = [
@@ -97,7 +100,7 @@ def main():
             tot[k] += err
             row.append(f'{k}: {i:5.1f}±{res[:, 0].std():3.1f} {o:5.1f}±{res[:, 1].std():3.1f} {err:5.1f}')
         print(f'{label:28s} | ' + ' | '.join(row))
-    print('Error medio total (|IN-42|+|OUT-42|): ' + ', '.join(f'{k}={v:.0f}' for k, v in tot.items()))
+    print(f'Error medio total (|IN-{GT_IN}|+|OUT-{GT_OUT}|): ' + ', '.join(f'{k}={v:.0f}' for k, v in tot.items()))
 
 
 if __name__ == '__main__':

@@ -39,3 +39,6 @@ Thumbs.db
 CARPETA_COFRE_MOVER_CARPETA_PRINCIPAL/
 # Cache del banco de pruebas del tracker
 bench/cache/
+
+# Frames extraídos para reetiquetar (pesados)
+data/despegues/

@@ -39,8 +39,10 @@ def preparar_train_y_balancear(num_parches=50, patch_size=(320, 320)):
     PROCESSED_TRAIN_DIR.mkdir(parents=True, exist_ok=True)
 
     # Crear classes.txt con la clase Abeja
-    with open(PROCESSED_TRAIN_DIR / "classes.txt", "w", encoding="utf-8") as f:
-        f.write("Abeja\n")
+    # newline="" evita que Windows escriba "\r\n": Edge Impulse tomaría el "\r"
+    # como parte del nombre y crearía la etiqueta "Abeja\r", distinta de "Abeja".
+    with open(PROCESSED_TRAIN_DIR / "classes.txt", "w", encoding="utf-8", newline="") as f:
+        f.write("Abeja")
 
     print(f"📁 Carpeta de destino preparada: {PROCESSED_TRAIN_DIR}")
 

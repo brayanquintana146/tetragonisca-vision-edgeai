@@ -499,7 +499,7 @@ python main.py --video "examples/videos/0040-1.mp4" --roi-x 900 --roi-y 600 --ro
 - `--show`: Muestra la ventana visual de OpenCV con rastreos interpolados.
 
 ### Banco de Pruebas del Tracker (`bench/`)
-Para medir cambios del tracker sin la Raspberry Pi, `bench/make_scenarios.py` cachea las detecciones de FOMO del video `0040-1.mp4` en varios escenarios, entre ellos una simulación de webcam 640x480 filmando un monitor (keystone, desenfoque, ruido, JPEG, exposición larga). Luego `bench/run_bench.py` compara v1 y v2 contra la referencia de campo (42 IN / 42 OUT):
+Para medir cambios del tracker sin la Raspberry Pi, `bench/make_scenarios.py` cachea las detecciones de FOMO del video `0040-1.mp4` en varios escenarios, entre ellos una simulación de webcam 640x480 filmando un monitor (keystone, desenfoque, ruido, JPEG, exposición larga). Luego `bench/run_bench.py` compara v1 y v2 entre escenarios (la referencia agregada disponible es el conteo *Pseudo* del paper, 42 IN / 85 OUT; ver [Validación del Conteo](#validación-del-conteo)):
 
 ```powershell
 python bench/make_scenarios.py --video examples/videos/0040-1.mp4 --out bench/cache   # ~5 min, una sola vez
@@ -507,12 +507,28 @@ python bench/run_bench.py --cache bench/cache                                   
 python test_tracker_v2.py                                                              # pruebas sintéticas
 ```
 
-### Precisión del Algoritmo (Prueba de Rendimiento)
-Las calibraciones realizadas sobre secuencias biológicas reales confirmadas de forma manual por investigadores han arrojado los siguientes promedios de exactitud en situaciones de vuelo de alto tránsito:
-- **Entradas (IN):** ~90% de exactitud (Bloqueo efectivo de falsos positivos en el tubo).
-- **Salidas (OUT):** ~85% de exactitud (Restaurado por vectores de cinemática predictiva).
-- **Conteo Acumulado:** Seguimiento de identidades únicas manteniendo el historial de la colonia.
+### Validación del Conteo
 
-> [!NOTE]
-> **Validación Científica:** Según la investigación de Brasil *"Multiple Object Tracking in Native Bee Hives - Jataí"*, al aplicar su Filtro de Remoción de Duplicados (RD), el conteo biológico real es de **156 abejas totales, 42 entradas y 42 salidas**. Sin aplicar filtros (conteo bruto), los resultados biológicos arrojan 156 totales, 42 entradas y **85 salidas**. 
-> Estos datos de campo se encuentran registrados oficialmente en el archivo `0040-1.txt` del dataset `004 - MOT`, del cual extrajimos el video de prueba original (`0040-1.mp4`). Los resultados del pipeline local (~38 IN, ~48 OUT, ~175 TOTAL) se aproximan a los resultados oficiales del filtro RD, procesándose en tiempo real en hardware de bajos recursos.
+**Referencia publicada.** La Tabla 1 de Leocádio et al., *"Multiple Object Tracking in Native Bee Hives - Jataí"*, reporta para el video `0040-1` un conteo *Pseudo* (conteo humano asistido por su software EuTrack): **156 abejas, 85 salidas y 42 entradas**. Es lo mismo que registra `0040-1.txt` del dataset `004 - MOT`. La columna *RD* (remoción de duplicados) de esa tabla corresponde a la salida de sus algoritmos (BT: 8 OUT / 24 IN; ET: 5 OUT / 32 IN), **no** a un conteo real. El paper no aclara si *Pseudo* incluye los cruces de las abejas guardianas que revolotean en la piquera.
+
+**Definición de evento de este proyecto.** Se cuentan solo las abejas que **realmente entran** a la colmena o **se van** de ella, sin guardianas ni abejas que se asoman y vuelven. Como no existe una referencia publicada con esa definición, la verdad de campo se construye anotando el video a mano:
+
+```powershell
+# 1. Anotar entradas/salidas reales (instrucciones y controles en el propio script)
+python tools/anotar_eventos.py --video examples/videos/0040-1.mp4 --roi-x 900 --roi-y 600 --roi-r 220 --out data/gt_0040-1.csv
+
+# 2. Generar los eventos del tracker y compararlos evento por evento
+python main.py --video examples/videos/0040-1.mp4 --roi-x 900 --roi-y 600 --roi-r 220 --no-output --events eventos.csv
+python bench/compare_events.py data/gt_0040-1.csv eventos.csv
+```
+
+**Verdad de campo propia.** `data/gt_0040-1.csv` es la anotación manual del minuto completo de `0040-1.mp4` con esa definición: **36 entradas y 78 salidas**. Como referencia, el *Pseudo* del paper da 42 / 85.
+
+**Estado actual del tracker v2 contra esa anotación** (`bench/compare_events.py`, tolerancia ±1 s):
+
+| Ejecución | Conteo IN / OUT | Precisión IN | Recall IN | Precisión OUT | Recall OUT |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| PC (TensorFlow) | 46 / 44 | 0.65 | 0.83 | 0.80 | 0.45 |
+| Raspberry Pi 5 (LiteRT) | 45 / 33 | 0.69 | 0.86 | 1.00 | 0.42 |
+
+Las entradas se detectan bien, aunque sobran algunas (probablemente guardianas). Las salidas se pierden en más de la mitad: al despegar, la abeja sale borrosa y FOMO casi no la detecta. Solo el 19% de las salidas tiene 3 o más detecciones cerca del cruce, frente al 83% de las entradas. Además, entre PC y Pi solo coinciden ~55-65% de los eventos, porque el conteo es sensible a pequeñas diferencias numéricas del runtime del modelo. Los siguientes pasos están en [`docs/PENDIENTES.md`](docs/PENDIENTES.md).

@@ -26,7 +26,9 @@ Además, el umbral `max_distance` se aplicaba **después** del Algoritmo Húngar
 7. **Captura en vivo:** la cámara se lee en un hilo aparte y siempre se procesa el frame más reciente, con su hora real de captura. Así no se acumulan frames viejos en el buffer.
 
 ### Resultados en el banco de pruebas (`bench/`)
-Se usan las detecciones reales de FOMO sobre `0040-1.mp4` y una simulación de webcam 640×480 filmando un monitor. Referencia de campo: 42 IN / 42 OUT.
+Se usan las detecciones reales de FOMO sobre `0040-1.mp4` y una simulación de webcam 640×480 filmando un monitor.
+
+> **Corrección:** esta tabla se calculó contra 42 IN / 42 OUT, que salió de una lectura equivocada del paper. La columna RD de su Tabla 1 es la salida de sus algoritmos, no un conteo real. La referencia publicada es *Pseudo*: **42 IN / 85 OUT**, y probablemente incluye cruces de guardianas. Además, entre PC y Raspberry Pi solo ~55-65% de los eventos coinciden. La tabla sirve para comparar la robustez de v1 y v2 ante resolución y FPS, **no** como medida de exactitud. La exactitud se medirá evento por evento contra una anotación manual (`tools/anotar_eventos.py` + `bench/compare_events.py`).
 
 ```
 Referencia de campo: 42 IN / 42 OUT. Promedio ± desv. sobre fases del submuestreo.
