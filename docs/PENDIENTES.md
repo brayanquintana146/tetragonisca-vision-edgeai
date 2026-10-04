@@ -85,6 +85,16 @@ Resultado con el modelo **viejo** (LiteRT en Linux, video completo):
 | Tracker: recall OUT (`compare_events.py`) | 0.49 | 0.37 |
 | Tracker: recall IN | 0.83 | 0.89 |
 
+Con el modelo **nuevo** (PC, TensorFlow, segunda mitad del video, 38 salidas):
+
+| | Frame completo | `--crop-roi` |
+|---|---|---|
+| Detector: salidas vistas en ≥3 de 13 frames | 45% | **58%** |
+| Tracker: recall OUT | 0.42 | 0.34 |
+| Tracker: precisión IN | 0.54 | 0.62 |
+
+Referencia, modelo viejo en la misma ventana (LiteRT): 37% sin recorte, 47% con recorte. **El reentrenamiento y el recorte sí ayudan al detector** (de ~37% a 58% de salidas vistas), pero el tracker pierde esas salidas. **El cuello de botella ahora es el tracker (punto 4).**
+
 El **detector** ve más abejas saliendo con el recorte, pero el **conteo de salidas empeora**: los parámetros del tracker se ajustaron con el frame aplastado. Falta: (a) probar el modelo nuevo con `--crop-roi`, y (b) revisar por qué el tracker pierde esas salidas (punto 4).
 
 ### 6. Prueba real con la webcam (Logitech C930e en la Raspberry Pi)
