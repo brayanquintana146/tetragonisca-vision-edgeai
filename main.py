@@ -72,7 +72,8 @@ class FOMODetector:
     Detector de centroides basado en el modelo FOMO (.lite / .tflite) exportado desde Edge Impulse.
     """
 
-    def __init__(self, model_path="models/fomo_tetragonisca_int8.lite", threshold=0.6, num_threads=1):
+    def __init__(self, model_path="models/fomo_tetragonisca_int8.lite", threshold=0.6, num_threads=1,
+                 crop_center=None):
         self.interpreter = tflite.Interpreter(
             model_path=model_path,
             num_threads=num_threads,   # multi-core en Pi 5: usar 4
@@ -86,6 +87,18 @@ class FOMODetector:
         self.input_height = self.input_details[0]['shape'][1]
         self.input_width = self.input_details[0]['shape'][2]
         self.threshold = threshold
+        # Si se define, se recorta un cuadrado del lado corto del frame centrado aquí (x, y),
+        # igual que "Fit shortest axis" de Edge Impulse, en vez de aplastar el frame completo
+        self.crop_center = crop_center
+
+    def crop_box(self, frame_w, frame_h):
+        """Región (x0, y0, ancho, alto) del frame que entra al modelo."""
+        if self.crop_center is None:
+            return 0, 0, frame_w, frame_h
+        side = min(frame_w, frame_h)
+        x0 = int(np.clip(self.crop_center[0] - side // 2, 0, frame_w - side))
+        y0 = int(np.clip(self.crop_center[1] - side // 2, 0, frame_h - side))
+        return x0, y0, side, side
 
     def detect(self, frame):
         """Centroides agrupados con el método v1 (radio fijo de 60 px)."""
@@ -95,8 +108,10 @@ class FOMODetector:
         """Celdas de FOMO sobre el umbral: lista de (cx, cy, prob) en px del frame."""
         frame_h, frame_w = frame.shape[:2]
 
-        # 1. Preprocesamiento: Redimensionar y convertir BGR a RGB
-        resized = cv2.resize(frame, (self.input_width, self.input_height))
+        # 1. Preprocesamiento: recortar (opcional), redimensionar y convertir BGR a RGB
+        x0, y0, crop_w, crop_h = self.crop_box(frame_w, frame_h)
+        region = frame[y0:y0 + crop_h, x0:x0 + crop_w]
+        resized = cv2.resize(region, (self.input_width, self.input_height))
         rgb = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
 
         # 2. Normalización y cuantización a INT8 [-128, 127]
@@ -122,8 +137,8 @@ class FOMODetector:
                     prob = (float(prob_int8) + 128) / 256.0
                     if prob > self.threshold:
                         # Convertir coordenada de grilla a píxel real del video original
-                        cx = int((x + 0.5) * (frame_w / grid_w))
-                        cy = int((y + 0.5) * (frame_h / grid_h))
+                        cx = x0 + int((x + 0.5) * (crop_w / grid_w))
+                        cy = y0 + int((y + 0.5) * (crop_h / grid_h))
                         raw_centroids.append((cx, cy, prob))
 
         return raw_centroids
@@ -193,6 +208,9 @@ def main():
     parser.add_argument("--roi-x", type=int, default=900, help="Centro X de la piquera")
     parser.add_argument("--roi-y", type=int, default=640, help="Centro Y de la piquera")
     parser.add_argument("--roi-r", type=int, default=200, help="Radio de la piquera en px")
+    parser.add_argument("--crop-roi", action="store_true",
+                        help="Recortar un cuadrado (lado corto del frame) centrado en la ROI antes del modelo, "
+                             "como 'Fit shortest axis' de Edge Impulse, en vez de aplastar el frame completo")
     parser.add_argument("--tracker", choices=["v2", "v1"], default="v2",
                         help="v2: Kalman + gating, independiente de resolución y FPS (defecto). v1: EuTrack original")
     parser.add_argument("--threshold", type=float, default=0.55, help="Umbral de confianza FOMO (v2: para crear abejas nuevas)")
@@ -220,7 +238,8 @@ def main():
 
     # Inicializar detector FOMO con LiteRT (v2 usa un umbral bajo y filtra después)
     det_threshold = min(args.threshold, args.assoc_threshold) if use_v2 else args.threshold
-    detector = FOMODetector(model_path=args.model, threshold=det_threshold, num_threads=args.num_threads)
+    detector = FOMODetector(model_path=args.model, threshold=det_threshold, num_threads=args.num_threads,
+                            crop_center=(args.roi_x, args.roi_y) if args.crop_roi else None)
 
     is_camera = args.video.isdigit() or args.video.startswith("/dev/video")
     video_source = int(args.video) if args.video.isdigit() else args.video
@@ -301,6 +320,9 @@ def main():
     print(f"Video Entrada : {args.video} ({width}x{height} a {fps} FPS)")
     print(f"Piquera ROI   : Centro=({args.roi_x}, {args.roi_y}), Radio={args.roi_r} px")
     print(f"Tracker       : {'v2 (Kalman + gating, tiempo real)' if use_v2 else 'v1 (EuTrack)'}")
+    cx0, cy0, cw, ch = detector.crop_box(width, height)
+    print(f"Entrada modelo: {'recorte ' if args.crop_roi else 'frame completo '}"
+          f"x={cx0}..{cx0 + cw}, y={cy0}..{cy0 + ch} -> {detector.input_width}x{detector.input_height}")
     print("-" * 60)
     if args.num_threads > 1:
         print(f"Hilos TFLite  : {args.num_threads} (multi-core)")
@@ -385,6 +407,9 @@ def main():
             # Círculo virtual de la piquera
             cv2.circle(frame, (args.roi_x, args.roi_y), args.roi_r, (0, 255, 255), 2)
             cv2.circle(frame, (args.roi_x, args.roi_y), 4, (0, 255, 255), -1)
+            if args.crop_roi:
+                # Región que ve el modelo; fuera de ella no hay detecciones
+                cv2.rectangle(frame, (cx0, cy0), (cx0 + cw - 1, cy0 + ch - 1), (255, 128, 0), 1)
 
             # Dibujar centroides, IDs y trayectorias (solo objetos activamente detectados)
             trails = tracker.trajectories

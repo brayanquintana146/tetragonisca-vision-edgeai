@@ -34,6 +34,7 @@
 
   Queda prácticamente igual con las abejas normales. Este test no mide los despegues; eso se mide en el paso 4 con el video.
 - **Test en Edge Impulse:** los despegues van todos a *training* a propósito. El test real de despegues es la segunda mitad del video (`--start 30`). Si más adelante se quiere un test de despegues en Edge Impulse, se puede sacar de la segunda mitad del 0040-1 (hay que agregar esa opción a `04_extraer_despegues.py`).
+- **Modelo nuevo contra el viejo** (PC, TensorFlow, segunda mitad del video): recall OUT 0.39 → 0.42 (15 → 16 de 38), precisión OUT 0.68 → 0.89, pero precisión IN 0.78 → 0.54 (13 entradas falsas, varias en los mismos puntos de la piquera). Casi no mejora las salidas. **No se reemplazó el modelo.**
 
 ## Pendientes (en orden)
 
@@ -72,9 +73,19 @@ Medir siempre con `bench/compare_events.py` contra `data/gt_0040-1.csv`.
 - **11 salidas con una sola detección:** evaluar crear tracks con 1 detección fuerte cerca del borde.
 - **Estabilidad PC/Pi:** agregar al banco de pruebas ruido del tamaño de la diferencia entre runtimes y exigir que los eventos casi no cambien.
 
-### 5. Preprocesamiento igual al del entrenamiento
+### 5. Preprocesamiento igual al del entrenamiento — opción `--crop-roi` agregada
 
-Edge Impulse entrenó con *Fit shortest axis* (recorte central), pero `main.py` aplasta el frame completo a 320×320, así que las abejas llegan deformadas. Probar recortar un cuadrado alrededor de la ROI. En una prueba rápida, la detección de salidas en ≥3 frames subió de 19% a 28%.
+Edge Impulse entrena con *Fit shortest axis* (recorte central), pero `main.py` aplasta el frame completo a 320×320, así que las abejas llegan deformadas. Ahora `main.py --crop-roi` recorta un cuadrado del lado corto del frame (1080×1080 en el video 0040-1) centrado en la ROI. Sin la opción, todo funciona igual que antes (verificado: mismos eventos).
+
+Resultado con el modelo **viejo** (LiteRT en Linux, video completo):
+
+| | Frame completo | `--crop-roi` |
+|---|---|---|
+| Detector: salidas vistas en ≥3 de 13 frames (`bench/detection_at_events.py`) | 41% | **54%** |
+| Tracker: recall OUT (`compare_events.py`) | 0.49 | 0.37 |
+| Tracker: recall IN | 0.83 | 0.89 |
+
+El **detector** ve más abejas saliendo con el recorte, pero el **conteo de salidas empeora**: los parámetros del tracker se ajustaron con el frame aplastado. Falta: (a) probar el modelo nuevo con `--crop-roi`, y (b) revisar por qué el tracker pierde esas salidas (punto 4).
 
 ### 6. Prueba real con la webcam (Logitech C930e en la Raspberry Pi)
 
