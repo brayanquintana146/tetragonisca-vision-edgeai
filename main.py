@@ -20,7 +20,7 @@ except ImportError:
         import tensorflow as _tf
         tflite = _tf.lite
 
-from src.counter import BeeCounter, BeeCounterV2
+from src.counter import BeeCounter, BeeCounterV2, BeeCounterHybrid
 from src.tracker import EuTrack, BeeTracker
 from src.detection import cluster_centroids
 from src.dashboard import Dashboard
@@ -220,6 +220,12 @@ def main():
     parser.add_argument("--max-gate", type=float, default=1.2,
                         help="v2: distancia máxima (en radios de la ROI) para unir una detección a un track. "
                              "Menor = los tracks saltan menos entre abejas vecinas")
+    parser.add_argument("--max-gate-tentative", type=float, default=None,
+                        help="v2: --max-gate para tracks nuevos sin confirmar (defecto: igual a --max-gate). "
+                             "Más grande = enlaza abejas en vuelo rápido")
+    parser.add_argument("--counter", choices=["v2", "hibrido"], default="v2",
+                        help="v2: una entrada/salida por track. hibrido: cuenta cada salida que cruza el borde "
+                             "(recupera las que un track largo se tragaba) y las entradas como v2")
     parser.add_argument("--accel-std", type=float, default=40.0,
                         help="v2: aceleración típica de una abeja (radios/s²). Mayor = sigue mejor los despegues bruscos")
     parser.add_argument("--max-disappeared", type=int, default=20, help="v1: frames tolerados sin deteccion antes de perder ID")
@@ -287,8 +293,10 @@ def main():
     if use_v2:
         # Todas las distancias del tracker v2 se miden en radios de la ROI
         tracker = BeeTracker(scale=args.roi_r, max_lost_s=args.max_lost, birth_min_prob=args.threshold,
-                             max_gate=args.max_gate, accel_std=args.accel_std)
-        counter = BeeCounterV2(roi_center=(args.roi_x, args.roi_y), roi_radius=args.roi_r)
+                             max_gate=args.max_gate, accel_std=args.accel_std,
+                             max_gate_tentative=args.max_gate_tentative)
+        counter_cls = BeeCounterHybrid if args.counter == "hibrido" else BeeCounterV2
+        counter = counter_cls(roi_center=(args.roi_x, args.roi_y), roi_radius=args.roi_r)
     else:
         tracker = EuTrack(max_disappeared=args.max_disappeared, max_distance=args.max_distance)
         counter = BeeCounter(roi_center=(args.roi_x, args.roi_y), roi_radius=args.roi_r)

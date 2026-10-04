@@ -220,7 +220,7 @@ class BeeTracker:
     def __init__(self, scale, accel_std=40.0, meas_std=0.08, init_vel_std=4.0,
                  gate_sigma=3.0, min_gate=0.35, max_gate=1.2,
                  max_lost_s=0.6, tentative_lost_s=0.1, min_hits=2,
-                 birth_min_prob=0.55, max_hits_kept=60):
+                 birth_min_prob=0.55, max_hits_kept=60, max_gate_tentative=None):
         """
         scale:            px que equivalen a 1 unidad (radio de la ROI).
         accel_std:        aceleración típica de una abeja (unidades/s²). Alto = reacciona rápido.
@@ -232,6 +232,9 @@ class BeeTracker:
         tentative_lost_s: ídem para tracks tentativos.
         min_hits:         detecciones necesarias para confirmar un track.
         birth_min_prob:   confianza mínima para crear un track nuevo.
+        max_gate_tentative: max_gate para tracks tentativos (None = igual a max_gate). Permite
+                          un max_gate chico para los confirmados (no saltan entre abejas
+                          vecinas) sin dejar de enlazar abejas en vuelo rápido.
         """
         s = float(scale)
         self.scale = s
@@ -243,6 +246,7 @@ class BeeTracker:
         self.gate_sigma = gate_sigma
         self.min_gate = min_gate * s
         self.max_gate = max_gate * s
+        self.max_gate_tentative = self.max_gate if max_gate_tentative is None else max_gate_tentative * s
         self.max_lost_s = max_lost_s
         self.tentative_lost_s = tentative_lost_s
         self.min_hits = min_hits
@@ -281,7 +285,8 @@ class BeeTracker:
     def _gate(self, tr):
         S = tr.P[:2, :2] + self.R
         sigma = np.sqrt(np.max(np.linalg.eigvalsh(S)))
-        return float(np.clip(self.gate_sigma * sigma, self.min_gate, self.max_gate))
+        hi = self.max_gate if tr.confirmed else self.max_gate_tentative
+        return float(np.clip(self.gate_sigma * sigma, self.min_gate, hi))
 
     # ------------------------------------------------------------------ API
     def update(self, detections, t):

@@ -206,3 +206,105 @@ class BeeCounterV2:
                 self._register(tr, "in")
 
         return {"in": self.in_count, "out": self.out_count}
+
+
+class BeeCounterCross(BeeCounterV2):
+    """
+    Cuenta CADA cruce del borde de la ROI, no una vez por track.
+
+    BeeCounterV2 cuenta como máximo un evento por track. Si un track se queda
+    pegado a una guardiana y luego "salta" a la abeja que despega, la salida se
+    pierde. Aquí cada track lleva su lado actual (dentro/fuera, con histéresis)
+    y cada cambio de lado es un evento candidato:
+      - dentro -> fuera: OUT;  fuera -> dentro: IN.
+      - Si el cruce se revierte antes de `cancel_s` (abeja que se asoma y
+        vuelve), se anulan los dos.
+      - Un cruce se confirma al pasar `cancel_s` sin reversa o al cerrarse el track.
+    El lado inicial y el destino final usan las mismas proyecciones que V2.
+    No modifica `tr.counted`, así puede convivir con un BeeCounterV2 (ver BeeCounterHybrid).
+    """
+
+    def __init__(self, roi_center, roi_radius, cancel_s=0.5, **kw):
+        super().__init__(roi_center, roi_radius, **kw)
+        self.cancel_s = cancel_s
+        self._side = {}      # track id -> "inside" / "outside"
+        self._pending = {}   # track id -> (kind, t, x, y)
+
+    def _emit(self, tr, kind, t, x, y):
+        self.counted.add(tr.id)
+        self.events.append((t, kind, tr.id, x, y))
+        if kind == "in":
+            self.in_count += 1
+        else:
+            self.out_count += 1
+
+    def _transition(self, tr, new_side, t, pos):
+        kind = "out" if new_side == "outside" else "in"
+        self._side[tr.id] = new_side
+        pend = self._pending.pop(tr.id, None)
+        if pend is not None:
+            if pend[0] != kind and t - pend[1] < self.cancel_s:
+                return                     # se asomó y volvió: se anulan ambos
+            self._emit(tr, *pend)
+        self._pending[tr.id] = (kind, t, float(pos[0]), float(pos[1]))
+
+    def update(self, active_tracks, finished_tracks=()):
+        for tr in active_tracks:
+            if tr.id not in self._side:
+                self._side[tr.id] = self._origin(tr)
+            d = self._d(tr.last_hit_pos)
+            side = "inside" if d < self.r_in else "outside" if d > self.r_out else None
+            if side is not None and side != self._side[tr.id]:
+                self._transition(tr, side, tr.t_last_hit, tr.last_hit_pos)
+            pend = self._pending.get(tr.id)
+            if pend is not None and tr.t_last_hit - pend[1] >= self.cancel_s:
+                self._emit(tr, *self._pending.pop(tr.id))
+
+        for tr in finished_tracks:
+            if tr.id not in self._side:
+                self._side[tr.id] = self._origin(tr)
+            dst = self._destination(tr)
+            if dst != self._side[tr.id]:
+                self._transition(tr, dst, tr.t_last_hit, tr.last_hit_pos)
+            pend = self._pending.pop(tr.id, None)
+            if pend is not None:
+                self._emit(tr, *pend)
+            self._side.pop(tr.id, None)
+
+        return {"in": self.in_count, "out": self.out_count}
+
+
+class BeeCounterHybrid:
+    """
+    Salidas por cruces (BeeCounterCross) y entradas por origen-destino (BeeCounterV2).
+
+    Las salidas se perdían cuando un track largo (guardiana) absorbía a la abeja
+    que despega: contar cada cruce hacia fuera las recupera. Para las entradas,
+    contar cada cruce suma falsas entradas de guardianas que caminan por el
+    borde, así que se mantiene la regla de una entrada por track, sin proyectar
+    hacia atrás el nacimiento (`in_back_project=False`), que también las reducía.
+    Expone la misma interfaz que BeeCounterV2 (update, events, in_count, out_count).
+    """
+
+    def __init__(self, roi_center, roi_radius, cancel_s=0.5, in_back_project=False, **kw):
+        self._in = BeeCounterV2(roi_center, roi_radius, back_project=in_back_project, **kw)
+        self._out = BeeCounterCross(roi_center, roi_radius, cancel_s=cancel_s, **kw)
+        self.events = []
+        self.counted = set()
+        self.in_count = 0
+        self.out_count = 0
+
+    def update(self, active_tracks, finished_tracks=()):
+        n_in, n_out = len(self._in.events), len(self._out.events)
+        self._in.update(active_tracks, finished_tracks)
+        self._out.update(active_tracks, finished_tracks)
+        new = [e for e in self._in.events[n_in:] if e[1] == "in"]
+        new += [e for e in self._out.events[n_out:] if e[1] == "out"]
+        for e in sorted(new):
+            self.events.append(e)
+            self.counted.add(e[2])
+            if e[1] == "in":
+                self.in_count += 1
+            else:
+                self.out_count += 1
+        return {"in": self.in_count, "out": self.out_count}
