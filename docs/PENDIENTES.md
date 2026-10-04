@@ -80,6 +80,8 @@ Se compartieron dos keys (ingestión y Admin) en un chat. Revocarlas en *Dashboa
 | Parámetros por defecto | 0.45 | 0.42 | 0.60 |
 | `--max-gate 0.6 --accel-std 80` | 0.55 | 0.50 | 0.57 |
 
+Confirmado en el PC de Brayan (TensorFlow, 30–60 s): recall OUT 0.34 → 0.47, F1 OUT 0.48 → 0.57, precisión OUT 0.81 → 0.72 (aparecen salidas falsas, dos en el mismo punto (886,445)); IN casi igual (F1 0.73 → 0.74). Comparado con el modelo viejo sin ajustes en ese PC (F1 IN 0.78, F1 OUT 0.50): mejor en salidas y un poco peor en entradas.
+
 Es la combinación que mejora en las dos mitades. Otras combinaciones dieron saltos mayores en una mitad y nada en la otra: con un solo minuto anotado (78 salidas), diferencias de ±0.1 son ~4 abejas y pueden ser ruido. **Para confirmar cualquier ajuste hace falta anotar un segundo video** con `tools/anotar_eventos.py`.
 
 Siguen pendientes:
