@@ -25,6 +25,41 @@ Además, el umbral `max_distance` se aplicaba **después** del Algoritmo Húngar
 6. **Conteo origen-destino:** una salida es un track que **nació dentro** de la ROI y **terminó fuera**, y una entrada es lo contrario. Si FOMO pierde la abeja al despegar o la detecta recién al aterrizar, se proyecta su posición con la velocidad del Kalman durante 0.25 s. Las guardianas que oscilan en el borde nacen y mueren del mismo lado, así que no cuentan.
 7. **Captura en vivo:** la cámara se lee en un hilo aparte y siempre se procesa el frame más reciente, con su hora real de captura. Así no se acumulan frames viejos en el buffer.
 
+### Contador híbrido (`--counter hibrido`, `src/counter.py::BeeCounterHybrid`)
+
+**Problema de `BeeCounterV2`:** cuenta como máximo un evento por track. En la piquera hay tracks que duran 10–20 s: se quedan pegados a una guardiana y saltan a la abeja que despega. Cuando esa abeja sale, el track ya contó algo o termina dentro de la ROI, y la salida se pierde.
+
+**Solución:**
+- **Salidas por cruce (`BeeCounterCross`):** cada track lleva su lado actual (dentro/fuera, con histéresis de 0.15 r). Cada paso de dentro a fuera es una salida candidata. Si el track vuelve a cruzar antes de `--cancel-s` (0.5 s), se anulan los dos cruces: es una abeja que se asomó. Al cerrarse el track se proyecta su posición con la velocidad del Kalman, solo si va a más de `--proj-min-speed` (1.5 r/s).
+- **Entradas como `BeeCounterV2`:** una por track y sin proyectar hacia atrás el nacimiento. Contar cada cruce hacia dentro sumaba entradas falsas de guardianas que caminan por el borde.
+
+**Ajustes del tracker que lo acompañan:**
+- `--max-gate 0.6`: un track confirmado solo acepta detecciones a menos de 0.6 radios de su predicción, así salta menos entre abejas vecinas.
+- `--max-gate-tentative 1.2`: un track nuevo puede enlazar saltos grandes de una abeja en vuelo rápido.
+- `--accel-std 80`: el Kalman acepta aceleraciones bruscas, como las de un despegue.
+
+Los valores por defecto de `main.py` no cambian (`--counter v2`, `--max-gate 1.2`, `--accel-std 40`).
+
+### Cómo se evalúa el conteo
+
+Se compara evento por evento contra `data/gt_0040-1.csv` con `bench/compare_events.py`. Hay dos cuidados importantes:
+
+1. **Medición estricta:** `--tol 0.5 --max-angle 40`. Con ±1 s y solo por tiempo, eventos al azar a la misma tasa ya dan F1 ≈ 0.65 en salidas, porque hay ~1.3 salidas por segundo. En los eventos acertados de verdad, la diferencia de tiempo mediana es de 0.02 s.
+2. **Comparar con el azar:** la columna *F1 azar* desplaza en el tiempo los mismos eventos del tracker. Un ajuste solo cuenta si mejora claramente sobre ella.
+
+**Resultado con el modelo v4 + `--crop-roi`** (30–60 s, medición estricta, detecciones del PC):
+
+| Contador | F1 IN (azar) | Salidas acertadas | F1 OUT (azar) |
+| :--- | :---: | :---: | :---: |
+| `v2` por defecto | 0.64 (0.26) | 6 de 38 | 0.22 (0.15) |
+| `hibrido` + ajustes de arriba | 0.58 (0.23) | 18 de 38 | 0.46 (0.26) |
+
+**Límite actual:** se barrieron más de 150 combinaciones (`--max-gate`, `--max-gate-tentative`, `--accel-std`, `--cancel-s`, `--proj-min-speed`, umbral de nacimiento), sobre las detecciones del PC y de Linux y con ruido simulado. El F1 de salidas no supera ~0.5–0.6. Solo `--accel-std 260 --max-gate-tentative 1.0` sube las entradas, de 0.58 a ~0.8 en 30–60 s, pero cuenta 58 salidas donde hay 38. El cuello de botella ya no es el tracker: FOMO deja de ver a la abeja borrosa al despegar. La siguiente mejora es reentrenar con abejas en vuelo (`scripts/05_extraer_borrosas.py`).
+
+**Herramientas:**
+- `bench/dump_detections.py`: guarda las detecciones crudas por frame en un `.json.gz`.
+- `bench/replay_detections.py`: corre el tracker y el contador sobre ese archivo en segundos, con los mismos flags que `main.py`.
+
 ### Resultados en el banco de pruebas (`bench/`)
 Se usan las detecciones reales de FOMO sobre `0040-1.mp4` y una simulación de webcam 640×480 filmando un monitor.
 

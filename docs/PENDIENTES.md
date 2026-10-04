@@ -2,143 +2,74 @@
 
 Última actualización: 4 de octubre de 2026. Rama: `feature/algoritmo-conteo`.
 
-## Dónde quedamos
+Lo hecho hasta ahora está en el [README](../README.md) (historial del modelo y validación del conteo) y en [TRACKING_ALGORITHM.md](TRACKING_ALGORITHM.md) (contador híbrido y cómo se evalúa).
 
-**Objetivo del conteo:** contar solo las abejas que **realmente entran** a la colmena o **se van**, sin guardianas ni abejas que se asoman y vuelven.
+## Estado de partida
 
-**Verdad de campo:** `data/gt_0040-1.csv`, anotada a mano en el minuto completo del video `0040-1`. Tiene **36 entradas y 78 salidas**. Como referencia, el conteo *Pseudo* del paper (Tabla 1) es 42 IN / 85 OUT / 156 abejas.
-
-**Tracker v2 contra la anotación** (`bench/compare_events.py`, ±1 s):
-
-| | Precisión IN | Recall IN | Precisión OUT | Recall OUT |
-|---|---|---|---|---|
-| PC (TensorFlow) | 0.65 | 0.83 | 0.80 | **0.45** |
-| Raspberry Pi 5 (LiteRT) | 0.69 | 0.86 | 1.00 | **0.42** |
-
-- **Entradas:** se detectan bien, pero sobran ~15, que probablemente son guardianas.
-- **Salidas:** se pierde más de la mitad. En el momento del cruce, el modelo ve en 3 o más frames al **83%** de las abejas que entran, pero solo al **19%** de las que salen, porque ya van volando y salen borrosas. **El cuello de botella de las salidas es el detector (FOMO), no el tracker.**
-- **Diferencias entre PC y Pi:** con el mismo código, cada runtime da conteos distintos (pequeñas diferencias numéricas del modelo int8). Solo ~55-65% de los eventos coinciden entre PC y Pi.
-
-## Avance del 3–4 de octubre de 2026
-
-- **Etiqueta unificada en Edge Impulse (punto 1, hecho).** La v3 (17 sep, 1,595 muestras) sirvió de respaldo porque el proyecto no había cambiado desde entonces. `tools/renombrar_etiqueta_ei.py` encontró 13,373 cajas `'Abeja\r'` en 1,391 muestras y las renombró a `'Abeja'`. Ahora hay **una sola clase**. Ojo: renombrar cajas pide una API key con rol **Admin**; la key de ingestión da error 403.
-- **Despegues subidos y etiquetados (punto 2, pasos 1 y 2, hechos).** Se subieron las 196 imágenes de `data/despegues/train` a *training*. El `classes.txt` se revisó byte a byte: dice `Abeja`, sin `\r` ni salto de línea. Se corrigieron las pre-etiquetas y se agregaron las abejas en vuelo (manchas borrosas). El círculo magenta de `referencia/` está fijo en el punto anotado, así que en los frames −6/−3/+3/+6 la abeja puede estar fuera del círculo.
-- **Versión guardada** en *Versioning*: "Modelo v3 + 196 imágenes de despegues etiquetadas".
-- **Línea base del modelo viejo** generada en `eventos_v2.csv` (`main.py --events`), para comparar después.
-- **Modelo reentrenado (punto 2, paso 3, hecho)** con la misma configuración. *Model testing*:
-
-| | Accuracy test | Precisión | Recall | F1 |
-|---|---|---|---|---|
-| v3 (17 sep) | 96% | 1.00 | 0.88 | 0.93 |
-| Nuevo, con despegues (4 oct) | 94.42% | 0.98 | 0.88 | 0.93 |
-
-  Queda prácticamente igual con las abejas normales. Este test no mide los despegues; eso se mide en el paso 4 con el video.
-- **Test en Edge Impulse:** los despegues van todos a *training* a propósito. El test real de despegues es la segunda mitad del video (`--start 30`). Si más adelante se quiere un test de despegues en Edge Impulse, se puede sacar de la segunda mitad del 0040-1 (hay que agregar esa opción a `04_extraer_despegues.py`).
-- **Modelo nuevo contra el viejo** (PC, TensorFlow, segunda mitad del video): recall OUT 0.39 → 0.42 (15 → 16 de 38), precisión OUT 0.68 → 0.89, pero precisión IN 0.78 → 0.54 (13 entradas falsas, varias en los mismos puntos de la piquera). Casi no mejora las salidas. **No se reemplazó el modelo.**
+- **Video de prueba:** `0040-1`, con 36 entradas y 78 salidas anotadas en `data/gt_0040-1.csv`. No se usa para entrenar.
+- **Modelo base para comparar:** `models/fomo_tetragonisca_int8.lite`, que nunca vio el `0040-1`.
+- **Edge Impulse (proyecto 1108884):**
+  - La versión **v4** guarda el estado con los 196 despegues del `0040-1`.
+  - Esos 196 se borran del proyecto; deben quedar 1,595 muestras más las borrosas.
+  - Se subieron **273 frames con abejas borrosas** de 44 videos de la colmena 004, sin el `0040-1` ni el `00427-28`.
+  - Los frames de los videos 1.º, 8.º, 15.º, 22.º, 29.º y 36.º de la carpeta van a *test*.
 
 ## Pendientes (en orden)
 
-### 1. ~~Unificar la etiqueta en Edge Impulse~~ — hecho el 3 de octubre
+### 1. Etiquetar las imágenes borrosas en Edge Impulse
 
-### 2. Reentrenar FOMO con abejas despegando (camino 1) — falta el paso 4
+- Poner caja `Abeja` a **todas** las abejas del frame, nítidas y borrosas. Una abeja sin caja le enseña al modelo que eso "no es abeja".
+- La mancha alargada de una abeja en vuelo también lleva caja, centrada en la mancha. Usar la misma etiqueta `Abeja`, no una clase nueva.
+- Corregir las cajas verdes pre-etiquetadas y borrar las que no sean abejas.
+- Si alguien ayuda (*Dashboard → Collaborators*), repartirse por video y revisar al final una muestra de sus imágenes.
 
-Pasos 1 a 3 hechos (ver *Avance* arriba). Si hay que regenerar `data/despegues/` (no va a GitHub):
+### 2. Entrenar el modelo nuevo (resolución 320)
+
+1. *Object detection* con la misma configuración de siempre (README, sección 7).
+2. Anotar las métricas de *Training* y de *Model testing*. El test ahora incluye abejas borrosas de 6 videos que el modelo no vio.
+3. Guardar la versión: `v5 - sin 0040-1 + 273 borrosas de 44 videos (320)`.
+4. Descargar el TFLite int8 como `models/fomo_borrosas_320_int8.lite`.
+
+### 3. (Opcional) Entrenar con resolución 480
+
+1. En *Impulse design → Image data*, cambiar 320×320 por 480×480.
+2. Ir a *Generate features* y entrenar.
+3. Descargar el modelo como `models/fomo_borrosas_480_int8.lite`.
+4. Medir los FPS en la Raspberry Pi antes de adoptarlo: hace ~2.25 veces más cálculo.
+
+### 4. Medir con el minuto completo del `0040-1`
 
 ```powershell
-python scripts/04_extraer_despegues.py --gt data/gt_0040-1.csv --video examples/videos/0040-1.mp4 --split 30
+python main.py --video examples/videos/0040-1.mp4 --model models/fomo_tetragonisca_int8.lite --roi-x 900 --roi-y 600 --roi-r 220 --crop-roi --counter hibrido --max-gate 0.6 --max-gate-tentative 1.2 --accel-std 80 --no-output --events ev_base.csv
+python main.py --video examples/videos/0040-1.mp4 --model models/fomo_borrosas_320_int8.lite --roi-x 900 --roi-y 600 --roi-r 220 --crop-roi --counter hibrido --max-gate 0.6 --max-gate-tentative 1.2 --accel-std 80 --no-output --events ev_A.csv
+python bench/compare_events.py data/gt_0040-1.csv ev_base.csv ev_A.csv --tol 0.5 --max-angle 40 -q
+python bench/detection_at_events.py --model models/fomo_borrosas_320_int8.lite
 ```
 
-**Siguiente:**
+- Comparar siempre el F1 con la columna **F1 azar**.
+- Meta: que suban las salidas acertadas y el % de salidas vistas por el detector, que hoy es 58% con `--crop-roi`.
+- Si mejora, decidir si `--crop-roi --counter hibrido` y los ajustes pasan a ser los valores por defecto de `main.py`, y probar el modelo en la Raspberry Pi.
 
-4. Descargar el modelo nuevo: Edge Impulse → *Dashboard* → *Download block output* → **TensorFlow Lite (int8 quantized)**. Guardarlo como `models/fomo_nuevo_int8.lite`, **sin reemplazar** `models/fomo_tetragonisca_int8.lite`.
-5. Evaluar **solo la segunda mitad** del video, que el modelo no vio:
-   ```powershell
-   python main.py --video examples/videos/0040-1.mp4 --model models/fomo_nuevo_int8.lite --roi-x 900 --roi-y 600 --roi-r 220 --no-output --events eventos_nuevo.csv
-   python bench/compare_events.py data/gt_0040-1.csv eventos_v2.csv eventos_nuevo.csv --start 30
-   ```
-   Meta: que el recall de OUT suba claramente de ~0.45 sin que baje la precisión.
-6. Si mejora, reemplazar el modelo por defecto y probarlo también en la Raspberry Pi.
+### 5. Preparar la presentación
 
-### 3. Rotar las API keys de Edge Impulse
+- **Qué funciona:** las entradas (F1 claramente sobre el azar) y el detector con abejas nítidas (F1 0.93 en *Model testing*).
+- **Qué funciona a medias:** las salidas, con la causa medida (abejas borrosas al despegar) y el efecto del reentrenamiento (paso 4).
+- **Método:** la medición estricta con comparación contra el azar, el test separado por video y el video de prueba anotado a mano.
+- **Trabajo futuro:**
+  - cámara C930e con exposición fija (`deployment.md`, sección 5);
+  - prueba de generalización: entrenar sin la colmena 004 y medir con el `0040-1`;
+  - etiquetar pocas imágenes en la colmena final de Cusco.
 
-Se compartieron dos keys (ingestión y Admin) en un chat. Revocarlas en *Dashboard → Keys* y crear una nueva de ingestión para el uploader. No dejar keys Admin activas.
+## Otros pendientes
 
-
-### 4. Pulir el tracker (camino 2) — diagnóstico del 4 de octubre
-
-**Por qué se pierden las salidas** (modelo nuevo, video completo, ~45 salidas perdidas):
-- **~16–25 sin ningún track cerca:** la abeja se detecta en pocos frames sueltos y no llega a formar un track confirmado.
-- **~6–15 absorbidas por un track largo:** hay tracks que duran 10–20 s (más de 1000 detecciones). Saltan de una abeja a otra en la piquera (guardianas, abejas caminando) y se tragan a la que despega. Como cada track cuenta una sola vez, la salida real no se cuenta o se cuenta en otro momento. A veces se cuenta como **entrada**.
-- **El resto:** origen o destino mal decididos (track que nace ya fuera de la ROI, o termina dentro).
-
-**Opciones nuevas en `main.py`** (por defecto no cambian nada): `--max-gate` (distancia máxima, en radios, para unir una detección a un track; defecto 1.2) y `--accel-std` (aceleración típica; defecto 40).
-
-**Prueba con `--max-gate 0.6 --accel-std 80`** (LiteRT, ajustado mirando 0–30 s y validado en 30–60 s):
-
-| Modelo nuevo + `--crop-roi` | Recall OUT 0–30 s | Recall OUT 30–60 s | Precisión IN 30–60 s |
-|---|---|---|---|
-| Parámetros por defecto | 0.45 | 0.42 | 0.60 |
-| `--max-gate 0.6 --accel-std 80` | 0.55 | 0.50 | 0.57 |
-
-Confirmado en el PC de Brayan (TensorFlow, 30–60 s): recall OUT 0.34 → 0.47, F1 OUT 0.48 → 0.57, precisión OUT 0.81 → 0.72 (aparecen salidas falsas, dos en el mismo punto (886,445)); IN casi igual (F1 0.73 → 0.74). Comparado con el modelo viejo sin ajustes en ese PC (F1 IN 0.78, F1 OUT 0.50): mejor en salidas y un poco peor en entradas.
-
-Es la combinación que mejora en las dos mitades. Otras combinaciones dieron saltos mayores en una mitad y nada en la otra: con un solo minuto anotado (78 salidas), diferencias de ±0.1 son ~4 abejas y pueden ser ruido. **Para confirmar cualquier ajuste hace falta anotar un segundo video** con `tools/anotar_eventos.py`.
-
-Siguen pendientes:
-
-Medir siempre con `bench/compare_events.py` contra `data/gt_0040-1.csv`.
-
-- **Entradas falsas (~15):** casi todas caen en las mismas posiciones de la piquera. Probablemente son guardianas: exigir más evidencia para contar una entrada.
-- **8 salidas contadas como entrada:** revisar la dirección que asigna el origen-destino y la proyección hacia atrás (`back_project`).
-- **11 salidas con una sola detección:** evaluar crear tracks con 1 detección fuerte cerca del borde.
-- **Estabilidad PC/Pi:** agregar al banco de pruebas ruido del tamaño de la diferencia entre runtimes y exigir que los eventos casi no cambien.
-
-### 5. Preprocesamiento igual al del entrenamiento — opción `--crop-roi` agregada
-
-Edge Impulse entrena con *Fit shortest axis* (recorte central), pero `main.py` aplasta el frame completo a 320×320, así que las abejas llegan deformadas. Ahora `main.py --crop-roi` recorta un cuadrado del lado corto del frame (1080×1080 en el video 0040-1) centrado en la ROI. Sin la opción, todo funciona igual que antes (verificado: mismos eventos).
-
-Resultado con el modelo **viejo** (LiteRT en Linux, video completo):
-
-| | Frame completo | `--crop-roi` |
-|---|---|---|
-| Detector: salidas vistas en ≥3 de 13 frames (`bench/detection_at_events.py`) | 41% | **54%** |
-| Tracker: recall OUT (`compare_events.py`) | 0.49 | 0.37 |
-| Tracker: recall IN | 0.83 | 0.89 |
-
-Con el modelo **nuevo** (PC, TensorFlow, segunda mitad del video, 38 salidas):
-
-| | Frame completo | `--crop-roi` |
-|---|---|---|
-| Detector: salidas vistas en ≥3 de 13 frames | 45% | **58%** |
-| Tracker: recall OUT | 0.42 | 0.34 |
-| Tracker: precisión IN | 0.54 | 0.62 |
-
-Referencia, modelo viejo en la misma ventana (LiteRT): 37% sin recorte, 47% con recorte. **El reentrenamiento y el recorte sí ayudan al detector** (de ~37% a 58% de salidas vistas), pero el tracker pierde esas salidas. **El cuello de botella ahora es el tracker (punto 4).**
-
-El **detector** ve más abejas saliendo con el recorte, pero el **conteo de salidas empeora**: los parámetros del tracker se ajustaron con el frame aplastado. Falta: (a) probar el modelo nuevo con `--crop-roi`, y (b) revisar por qué el tracker pierde esas salidas (punto 4).
-
-### 6. Prueba real con la webcam (Logitech C930e en la Raspberry Pi)
-
-- Fijar la exposición y apagar el autofoco con `v4l2-ctl` (sección 5 de `deployment.md`).
-- Calibrar la ROI con `--snapshot-every` para la resolución de la cámara.
-- Grabar un clip crudo con `ffmpeg -f v4l2 -input_format mjpeg -video_size 640x480 -framerate 30 -i /dev/video0 -t 70 -c copy clip_webcam.mkv` y anotarlo con `tools/anotar_eventos.py`, para evaluar con condiciones reales.
-
-### 7. Orden y seguridad del repositorio
-
-- **Contraseña expuesta:** `deployment.md` tiene escrita la contraseña del usuario `pi` y del Wi-Fi. Si el repo es público, quitarla y cambiarla en la Pi con `passwd`. Igual queda en el historial de git.
-- **Licencia inconsistente:** el badge del README dice MIT, pero el árbol del repo dice BSD 3-Clause.
-- **Árbol del README desactualizado:** faltan `src/`, `bench/`, `tools/`, `main.py` y `deployment.md`.
-- **Archivos por revisar:** `output_result.mp4` (~33 MB) y la carpeta `CARPETA_COFRE_MOVER_CARPETA_PRINCIPAL`, que parece temporal.
-- **Windows:** `bench/make_scenarios.py` importa `ai_edge_litert`, que no existe para Windows. Adaptarlo para que use TensorFlow como respaldo, igual que `main.py`.
-
-## Herramientas creadas
-
-| Archivo | Para qué |
-|---|---|
-| `tools/anotar_eventos.py` | Anotar a mano entradas/salidas reales de un video (genera el CSV de verdad de campo) |
-| `bench/compare_events.py` | Comparar eventos del tracker contra la anotación: TP/FP/FN, precisión y recall por tipo |
-| `scripts/04_extraer_despegues.py` | Extraer frames alrededor de cada salida anotada, con pre-etiquetas, para reentrenar |
-| `tools/etiquetar_cajas.py` | Editor local de cajas YOLO, con zoom sobre la abeja que despega |
-| `tools/renombrar_etiqueta_ei.py` | Renombrar etiquetas de cajas en todo un proyecto de Edge Impulse vía API |
-| `bench/make_scenarios.py` + `bench/run_bench.py` | Banco de pruebas con escenarios de webcam simulada (solo totales; referencia orientativa) |
-| `test_tracker_v2.py` | Pruebas sintéticas del tracker v2 |
+- **Rotar las API keys de Edge Impulse:** se compartieron dos (ingestión y Admin) en un chat. Revocarlas en *Dashboard → Keys* y no dejar keys Admin activas.
+- **Anotar un segundo video de prueba** con `tools/anotar_eventos.py`. Un solo minuto no basta para confirmar ajustes finos.
+- **Prueba real con la webcam C930e en la Pi:**
+  - fijar la exposición con `v4l2-ctl`;
+  - calibrar la ROI con `--snapshot-every`;
+  - grabar un clip y anotarlo.
+- **Orden del repositorio:**
+  - quitar la contraseña de `pi` y del Wi-Fi de `deployment.md` y cambiarla en la Pi;
+  - licencia inconsistente (MIT en el badge, BSD 3-Clause en el repo);
+  - revisar `output_result.mp4` y `CARPETA_COFRE_MOVER_CARPETA_PRINCIPAL`;
+  - `bench/make_scenarios.py` necesita TensorFlow como respaldo en Windows.

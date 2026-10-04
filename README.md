@@ -74,7 +74,15 @@ tetragonisca-vision-edgeai/
 ├── scripts/                      # Pipeline MLOps de preparación de datos
 │   ├── 01_preparar_train.py      # Limpieza de Colmena 004 e inyección de clase negativa
 │   ├── 02_copiar_valid_a_train.py # Unificación del split de validación en train
-│   └── 03_preparar_test.py       # Preparación del conjunto reservado de pruebas
+│   ├── 03_preparar_test.py       # Preparación del conjunto reservado de pruebas
+│   ├── 04_extraer_despegues.py   # Frames alrededor de cada salida anotada (requiere anotación)
+│   └── 05_extraer_borrosas.py    # Frames con abejas en movimiento que el modelo no detecta (sin anotar)
+├── src/                          # Tracker v2 (Kalman) y contadores (v2, cruces, híbrido)
+├── bench/                        # Evaluación: comparar eventos, detecciones guardadas, banco de pruebas
+├── tools/                        # Anotación de eventos, editor de cajas, renombrar etiquetas en Edge Impulse
+├── docs/                         # Algoritmo de seguimiento y pendientes
+├── main.py                       # Inferencia + tracker + conteo (video o cámara)
+├── deployment.md                 # Despliegue en la Raspberry Pi 5
 ├── .gitignore                    # Reglas de exclusión para Git (datasets y temporales)
 ├── LICENSE                       # Licencia BSD 3-Clause
 └── README.md                     # Portada e instrucciones principales del proyecto
@@ -472,6 +480,11 @@ Para evaluar el impacto de agregar variabilidad al modelo, se registran las mét
 | [**`-multihive`**](https://studio.edgeimpulse.com/studio/1108884) | **v1** | 004 + 005 | 94.85% | 1.00 | 0.89 | 0.94 | El Recall baja ligeramente por la iluminación, pero sin falsos positivos. |
 | [**`-multihive`**](https://studio.edgeimpulse.com/studio/1108884) | **v2** | 004 + 005 + 001 | 91.84% | 0.99 | 0.87 | 0.93 | El modelo aprende la variabilidad y generaliza en 3 colmenas distintas. |
 | [**`-multihive`**](https://studio.edgeimpulse.com/studio/1108884) | **v3** | 004 + 005 + 001 + 003 | 95.94% | 1.00 | 0.88 | 0.93 | Alta generalización a 4 colmenas, recuperando 1.00 de precisión y subiendo accuracy. |
+| [**`-multihive`**](https://studio.edgeimpulse.com/studio/1108884) | **v4** | v3 + 196 frames de despegues del video `0040-1` | 94.42% | 0.98 | 0.88 | 0.93 | Igual con abejas normales. Los despegues salen de la primera mitad del `0040-1`. Luego se quitaron para usar el `0040-1` completo como prueba. |
+
+**Etiqueta unificada (3 oct 2026).** Hasta la v3 las cajas tenían dos etiquetas: `Abeja` y `Abeja\r` (un `\r` de Windows en un `classes.txt`). `tools/renombrar_etiqueta_ei.py` renombró 13,373 cajas en 1,391 muestras y ahora hay una sola clase. Renombrar cajas pide una API key con rol **Admin**. Los `classes.txt` nuevos se escriben sin salto de línea.
+
+**Abejas en vuelo (borrosas).** El modelo casi no detecta a las abejas que despegan, porque salen borrosas: la v4 tenía solo ~20 entre los 196 despegues. `scripts/05_extraer_borrosas.py` busca, en videos sin anotar, los frames donde algo se mueve cerca de la piquera y FOMO no lo detecta. Así salieron 273 frames útiles de 44 videos de la colmena 004, sin contar el `0040-1` ni el `00427-28`. Las imágenes de 6 videos (1.º, 8.º, 15.º, 22.º, 29.º y 36.º de la carpeta) van a *test*, separadas **por video** para que no haya frames casi iguales en train y test.
 
 ## 10. Ejecución Local y Monitoreo en Tiempo Real
 
@@ -495,6 +508,9 @@ python main.py --video "examples/videos/0040-1.mp4" --roi-x 900 --roi-y 600 --ro
 - `--threshold`: Confianza mínima para crear una abeja nueva (por defecto `0.55`).
 - `--assoc-threshold`: Confianza mínima para seguir una abeja ya rastreada (por defecto `0.35`, rescata detecciones borrosas).
 - `--cam-width`, `--cam-height`, `--cam-fps`: Resolución y FPS pedidos a la webcam.
+- `--crop-roi`: recorta un cuadrado (lado corto del frame) centrado en la ROI antes del modelo, igual que *Fit shortest axis* de Edge Impulse. Sin esta opción el frame completo se aplasta a 320×320.
+- `--counter`: `v2` (una entrada/salida por track, por defecto) o `hibrido` (cuenta cada salida que cruza el borde y las entradas como v2). Ver [TRACKING_ALGORITHM.md](docs/TRACKING_ALGORITHM.md).
+- `--max-gate`, `--max-gate-tentative`, `--accel-std`, `--max-lost`, `--cancel-s`, `--proj-min-speed`: ajustes del tracker y del contador híbrido (en radios de la ROI y segundos).
 - `--events`: CSV con cada evento IN/OUT (tiempo, ID, posición).
 - `--show`: Muestra la ventana visual de OpenCV con rastreos interpolados.
 
@@ -524,11 +540,27 @@ python bench/compare_events.py data/gt_0040-1.csv eventos.csv
 
 **Verdad de campo propia.** `data/gt_0040-1.csv` es la anotación manual del minuto completo de `0040-1.mp4` con esa definición: **36 entradas y 78 salidas**. Como referencia, el *Pseudo* del paper da 42 / 85.
 
-**Estado actual del tracker v2 contra esa anotación** (`bench/compare_events.py`, tolerancia ±1 s):
+**Cómo medir.** `bench/compare_events.py` empareja cada evento del tracker con uno anotado del mismo tipo. Con la tolerancia por defecto (±1 s y sin mirar la posición), las salidas no se distinguen del azar: hay ~1.3 salidas por segundo, y eventos puestos en momentos aleatorios ya dan F1 ≈ 0.65. Por eso:
 
-| Ejecución | Conteo IN / OUT | Precisión IN | Recall IN | Precisión OUT | Recall OUT |
-| :--- | :---: | :---: | :---: | :---: | :---: |
-| PC (TensorFlow) | 46 / 44 | 0.65 | 0.83 | 0.80 | 0.45 |
-| Raspberry Pi 5 (LiteRT) | 45 / 33 | 0.69 | 0.86 | 1.00 | 0.42 |
+- La columna **F1 azar** da el F1 que se obtiene desplazando en el tiempo los mismos eventos del tracker. Un resultado vale solo si lo supera con claridad.
+- Se usa la medición estricta: `--tol 0.5 --max-angle 40`, es decir, ±0.5 s y del mismo lado de la piquera (±40° alrededor de la ROI).
 
-Las entradas se detectan bien, aunque sobran algunas (probablemente guardianas). Las salidas se pierden en más de la mitad: al despegar, la abeja sale borrosa y FOMO casi no la detecta. Solo el 19% de las salidas tiene 3 o más detecciones cerca del cruce, frente al 83% de las entradas. Además, entre PC y Pi solo coinciden ~55-65% de los eventos, porque el conteo es sensible a pequeñas diferencias numéricas del runtime del modelo. Los siguientes pasos están en [`docs/PENDIENTES.md`](docs/PENDIENTES.md).
+```powershell
+python main.py --video examples/videos/0040-1.mp4 --model models/fomo_nuevo_int8.lite --roi-x 900 --roi-y 600 --roi-r 220 --crop-roi --counter hibrido --max-gate 0.6 --max-gate-tentative 1.2 --accel-std 80 --no-output --events eventos.csv
+python bench/compare_events.py data/gt_0040-1.csv eventos.csv --start 30 --tol 0.5 --max-angle 40
+```
+
+**Para ajustar el tracker sin el video**, `bench/dump_detections.py` guarda las detecciones crudas de cada frame y `bench/replay_detections.py` corre el tracker y el contador sobre ellas en segundos. El resultado es idéntico en cualquier PC con el mismo archivo. `bench/detection_at_events.py` mide solo el detector: en cuántos frames alrededor de cada evento anotado hay una detección cerca.
+
+**Resultados (4 oct 2026).** Modelo v4 con `--crop-roi`, segunda mitad del video (30–60 s, que el modelo no vio: 18 entradas, 38 salidas), detecciones del PC, medición estricta:
+
+| Contador | F1 IN (azar) | Salidas acertadas | F1 OUT (azar) |
+| :--- | :---: | :---: | :---: |
+| `v2` por defecto | 0.64 (0.26) | 6 de 38 | 0.22 (0.15) |
+| `hibrido --max-gate 0.6 --max-gate-tentative 1.2 --accel-std 80` | 0.58 (0.23) | 18 de 38 | 0.46 (0.26) |
+
+- **Entradas:** claramente por encima del azar.
+- **Salidas:** el contador híbrido casi triplica las acertadas, pero se pierde la mitad. Más de 150 combinaciones de parámetros del tracker no mejoran esto. La causa está en el detector: al despegar, la abeja sale borrosa y FOMO deja de verla. Con `--crop-roi`, el modelo ve en 3 o más de 13 frames solo al 58% de las abejas que salen.
+- **PC y Linux** dan las mismas celdas con probabilidades distintas en ±0.05. Basta eso para mover el F1 de salidas entre 0.06 y 0.08, así que diferencias menores a eso entre configuraciones no son significativas con un solo minuto anotado.
+
+Los siguientes pasos están en [`docs/PENDIENTES.md`](docs/PENDIENTES.md).
