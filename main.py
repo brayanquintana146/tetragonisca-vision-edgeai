@@ -217,6 +217,11 @@ def main():
     parser.add_argument("--assoc-threshold", type=float, default=0.35,
                         help="v2: umbral menor para seguir abejas ya rastreadas (detecciones borrosas)")
     parser.add_argument("--max-lost", type=float, default=0.6, help="v2: segundos sin detección antes de cerrar un track")
+    parser.add_argument("--max-gate", type=float, default=1.2,
+                        help="v2: distancia máxima (en radios de la ROI) para unir una detección a un track. "
+                             "Menor = los tracks saltan menos entre abejas vecinas")
+    parser.add_argument("--accel-std", type=float, default=40.0,
+                        help="v2: aceleración típica de una abeja (radios/s²). Mayor = sigue mejor los despegues bruscos")
     parser.add_argument("--max-disappeared", type=int, default=20, help="v1: frames tolerados sin deteccion antes de perder ID")
     parser.add_argument("--max-distance", type=int, default=250, help="v1: distancia euclidiana maxima (px) para mantener ID")
     parser.add_argument("--cam-width", type=int, default=0, help="Ancho pedido a la cámara (0 = por defecto del driver)")
@@ -281,7 +286,8 @@ def main():
 
     if use_v2:
         # Todas las distancias del tracker v2 se miden en radios de la ROI
-        tracker = BeeTracker(scale=args.roi_r, max_lost_s=args.max_lost, birth_min_prob=args.threshold)
+        tracker = BeeTracker(scale=args.roi_r, max_lost_s=args.max_lost, birth_min_prob=args.threshold,
+                             max_gate=args.max_gate, accel_std=args.accel_std)
         counter = BeeCounterV2(roi_center=(args.roi_x, args.roi_y), roi_radius=args.roi_r)
     else:
         tracker = EuTrack(max_disappeared=args.max_disappeared, max_distance=args.max_distance)
@@ -582,4 +588,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    main()

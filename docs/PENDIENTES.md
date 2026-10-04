@@ -64,7 +64,25 @@ python scripts/04_extraer_despegues.py --gt data/gt_0040-1.csv --video examples/
 Se compartieron dos keys (ingestión y Admin) en un chat. Revocarlas en *Dashboard → Keys* y crear una nueva de ingestión para el uploader. No dejar keys Admin activas.
 
 
-### 4. Pulir el tracker (camino 2)
+### 4. Pulir el tracker (camino 2) — diagnóstico del 4 de octubre
+
+**Por qué se pierden las salidas** (modelo nuevo, video completo, ~45 salidas perdidas):
+- **~16–25 sin ningún track cerca:** la abeja se detecta en pocos frames sueltos y no llega a formar un track confirmado.
+- **~6–15 absorbidas por un track largo:** hay tracks que duran 10–20 s (más de 1000 detecciones). Saltan de una abeja a otra en la piquera (guardianas, abejas caminando) y se tragan a la que despega. Como cada track cuenta una sola vez, la salida real no se cuenta o se cuenta en otro momento. A veces se cuenta como **entrada**.
+- **El resto:** origen o destino mal decididos (track que nace ya fuera de la ROI, o termina dentro).
+
+**Opciones nuevas en `main.py`** (por defecto no cambian nada): `--max-gate` (distancia máxima, en radios, para unir una detección a un track; defecto 1.2) y `--accel-std` (aceleración típica; defecto 40).
+
+**Prueba con `--max-gate 0.6 --accel-std 80`** (LiteRT, ajustado mirando 0–30 s y validado en 30–60 s):
+
+| Modelo nuevo + `--crop-roi` | Recall OUT 0–30 s | Recall OUT 30–60 s | Precisión IN 30–60 s |
+|---|---|---|---|
+| Parámetros por defecto | 0.45 | 0.42 | 0.60 |
+| `--max-gate 0.6 --accel-std 80` | 0.55 | 0.50 | 0.57 |
+
+Es la combinación que mejora en las dos mitades. Otras combinaciones dieron saltos mayores en una mitad y nada en la otra: con un solo minuto anotado (78 salidas), diferencias de ±0.1 son ~4 abejas y pueden ser ruido. **Para confirmar cualquier ajuste hace falta anotar un segundo video** con `tools/anotar_eventos.py`.
+
+Siguen pendientes:
 
 Medir siempre con `bench/compare_events.py` contra `data/gt_0040-1.csv`.
 
