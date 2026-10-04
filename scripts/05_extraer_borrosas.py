@@ -23,7 +23,7 @@ No uses aquí el video con el que evalúas (0040-1): sus frames contaminarían l
 
 Uso (varios videos a la vez):
   python scripts/05_extraer_borrosas.py --model models/fomo_nuevo_int8.lite ^
-      --videos C:\\videos_004\\*.mp4
+      --videos C:\\videos_004\\*.mp4 --exclude 0040-1 00427
 """
 import argparse
 import glob
@@ -52,6 +52,8 @@ def motion_blobs(prev, cur, thr, min_area, max_area):
 def main():
     ap = argparse.ArgumentParser(description="Extrae frames con abejas borrosas que el modelo no detecta")
     ap.add_argument("--videos", nargs="+", required=True, help="videos o patrones (p. ej. C:\\videos\\*.mp4)")
+    ap.add_argument("--exclude", nargs="*", default=["0040-1"],
+                    help="saltar los videos cuyo nombre contenga alguno de estos textos (defecto: 0040-1, el de prueba)")
     ap.add_argument("--model", default="models/fomo_nuevo_int8.lite")
     ap.add_argument("--out", default="data/borrosas")
     ap.add_argument("--roi-x", type=int, default=900)
@@ -71,6 +73,9 @@ def main():
     a = ap.parse_args()
 
     paths = sorted({p for pat in a.videos for p in (glob.glob(pat) or [pat])})
+    skipped = [p for p in paths if any(x in os.path.basename(p) for x in a.exclude)]
+    paths = [p for p in paths if p not in skipped]
+    print(f"Videos a procesar: {len(paths)} | excluidos: {', '.join(os.path.basename(p) for p in skipped) or 'ninguno'}")
     detector = FOMODetector(model_path=a.model, threshold=a.assoc_threshold, num_threads=4,
                             crop_center=(a.roi_x, a.roi_y))
     d_train = os.path.join(a.out, "train")
