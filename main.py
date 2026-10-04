@@ -226,6 +226,11 @@ def main():
     parser.add_argument("--counter", choices=["v2", "hibrido"], default="v2",
                         help="v2: una entrada/salida por track. hibrido: cuenta cada salida que cruza el borde "
                              "(recupera las que un track largo se tragaba) y las entradas como v2")
+    parser.add_argument("--cancel-s", type=float, default=0.5,
+                        help="hibrido: si una abeja cruza hacia fuera y vuelve antes de estos segundos, no cuenta")
+    parser.add_argument("--proj-min-speed", type=float, default=1.5,
+                        help="hibrido: velocidad mínima (radios/s) para proyectar fuera de la ROI un track que se cierra. "
+                             "Mayor = menos salidas falsas y menos salidas detectadas")
     parser.add_argument("--accel-std", type=float, default=40.0,
                         help="v2: aceleración típica de una abeja (radios/s²). Mayor = sigue mejor los despegues bruscos")
     parser.add_argument("--max-disappeared", type=int, default=20, help="v1: frames tolerados sin deteccion antes de perder ID")
@@ -295,8 +300,11 @@ def main():
         tracker = BeeTracker(scale=args.roi_r, max_lost_s=args.max_lost, birth_min_prob=args.threshold,
                              max_gate=args.max_gate, accel_std=args.accel_std,
                              max_gate_tentative=args.max_gate_tentative)
-        counter_cls = BeeCounterHybrid if args.counter == "hibrido" else BeeCounterV2
-        counter = counter_cls(roi_center=(args.roi_x, args.roi_y), roi_radius=args.roi_r)
+        if args.counter == "hibrido":
+            counter = BeeCounterHybrid(roi_center=(args.roi_x, args.roi_y), roi_radius=args.roi_r,
+                                       cancel_s=args.cancel_s, proj_min_speed=args.proj_min_speed)
+        else:
+            counter = BeeCounterV2(roi_center=(args.roi_x, args.roi_y), roi_radius=args.roi_r)
     else:
         tracker = EuTrack(max_disappeared=args.max_disappeared, max_distance=args.max_distance)
         counter = BeeCounter(roi_center=(args.roi_x, args.roi_y), roi_radius=args.roi_r)

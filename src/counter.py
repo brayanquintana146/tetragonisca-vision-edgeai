@@ -217,18 +217,28 @@ class BeeCounterCross(BeeCounterV2):
     pierde. Aquí cada track lleva su lado actual (dentro/fuera, con histéresis)
     y cada cambio de lado es un evento candidato:
       - dentro -> fuera: OUT;  fuera -> dentro: IN.
-      - Si el cruce se revierte antes de `cancel_s` (abeja que se asoma y
-        vuelve), se anulan los dos.
+      - Si el cruce se revierte antes de `cancel_s` (abeja que se asoma o guardiana
+        que camina por el borde y vuelve), se anulan los dos.
       - Un cruce se confirma al pasar `cancel_s` sin reversa o al cerrarse el track.
     El lado inicial y el destino final usan las mismas proyecciones que V2.
     No modifica `tr.counted`, así puede convivir con un BeeCounterV2 (ver BeeCounterHybrid).
     """
 
-    def __init__(self, roi_center, roi_radius, cancel_s=0.5, **kw):
+    def __init__(self, roi_center, roi_radius, cancel_s=0.5, proj_min_speed=1.5, **kw):
         super().__init__(roi_center, roi_radius, **kw)
         self.cancel_s = cancel_s
+        # Proyección al cerrarse el track: solo si va a más de proj_min_speed (radios/s).
+        # Subirlo evita "proyectar" fuera de la ROI abejas casi quietas cuya velocidad del
+        # Kalman tiembla (salidas falsas), a cambio de perder algunas salidas reales
+        self.proj_min_speed = proj_min_speed * self.r
         self._side = {}      # track id -> "inside" / "outside"
         self._pending = {}   # track id -> (kind, t, x, y)
+
+    def _destination(self, tr):
+        end = tr.last_hit_pos
+        if np.linalg.norm(tr.vel) >= self.proj_min_speed:
+            end = end + tr.vel * self.lookahead_s
+        return "outside" if self._d(end) >= self.r else "inside"
 
     def _emit(self, tr, kind, t, x, y):
         self.counted.add(tr.id)
@@ -286,9 +296,9 @@ class BeeCounterHybrid:
     Expone la misma interfaz que BeeCounterV2 (update, events, in_count, out_count).
     """
 
-    def __init__(self, roi_center, roi_radius, cancel_s=0.5, in_back_project=False, **kw):
+    def __init__(self, roi_center, roi_radius, cancel_s=0.5, proj_min_speed=1.5, in_back_project=False, **kw):
         self._in = BeeCounterV2(roi_center, roi_radius, back_project=in_back_project, **kw)
-        self._out = BeeCounterCross(roi_center, roi_radius, cancel_s=cancel_s, **kw)
+        self._out = BeeCounterCross(roi_center, roi_radius, cancel_s=cancel_s, proj_min_speed=proj_min_speed, **kw)
         self.events = []
         self.counted = set()
         self.in_count = 0

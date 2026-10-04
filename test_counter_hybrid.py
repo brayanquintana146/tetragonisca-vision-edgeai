@@ -32,10 +32,12 @@ def test_two_exits_same_track():
             return (0.3 + (t - 1.0) * 3.0, 0.0)        # sale hasta 1.8 r
         if t < 3.0:
             return (1.8 - (t - 1.5) * 1.0, 0.0)        # vuelve despacio hasta 0.3 r
-        if t < 3.5:
-            return (0.3 + (t - 3.0) * 3.0, 0.0)        # sale otra vez
+        if t < 4.0:
+            return (0.3, 0.0)                          # se queda dentro
+        if t < 4.5:
+            return (0.3 + (t - 4.0) * 3.0, 0.0)        # sale otra vez
         return (1.8, 0.0)
-    assert run(path, 4.5)[1] == 2
+    assert run(path, 5.5)[1] == 2
 
 
 def test_peek_and_return_cancels():
