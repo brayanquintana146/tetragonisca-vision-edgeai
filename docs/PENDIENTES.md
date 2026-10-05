@@ -76,6 +76,8 @@ Ojo: la ROI y el core del `00517-18` se eligieron mirando ese video, así que es
 
 ### 3. Medir los FPS del modelo 480 en la Raspberry Pi 5
 
+**Primera medición (5 oct):** `0040-1` en la Pi 5 con la configuración recomendada, `--num-threads 4`, `--dashboard` y guardando el video (`--output`): **20.9 FPS**, 03:45 para un minuto de video, 32 entradas / 50 salidas (en el PC: 33 / 47), procesador a ~65 °C. No alcanza los 60 fps del video, pero supera los ~15 fps mínimos. Falta medir con `--no-output` (sin dibujar ni guardar video debería ir más rápido) y con la cámara a 30 fps.
+
 Si no alcanza el tiempo real, probar el de 320 (`models/fomo_borrosas_320_int8.lite`, si se descargó de la v6).
 
 El resumen final de `main.py` ya dice los FPS y si alcanza el tiempo real.
