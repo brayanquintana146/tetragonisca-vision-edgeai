@@ -484,7 +484,7 @@ def main():
 
             # Tablero de Estadísticas (HUD Transparente)
             overlay = frame.copy()
-            cv2.rectangle(overlay, (10, 10), (300, 135), (0, 0, 0), -1)
+            cv2.rectangle(overlay, (10, 10), (300, 105), (0, 0, 0), -1)
             cv2.addWeighted(overlay, 0.6, frame, 0.4, 0, frame)
 
             cv2.putText(
@@ -512,15 +512,6 @@ def main():
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.6,
                 (0, 0, 255),
-                2,
-            )
-            cv2.putText(
-                frame,
-                f"Total Abejas  : {total_ids}",
-                (20, 116),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.6,
-                (255, 255, 0),
                 2,
             )
 
