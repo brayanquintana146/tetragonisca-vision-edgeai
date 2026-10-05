@@ -608,7 +608,8 @@ def main():
     h, m = divmod(m, 60)
     total_time_str = f"{h:02d}:{m:02d}:{s:02d}" if h > 0 else f"{m:02d}:{s:02d}"
 
-    avg_fps = (processed_frames / total_processing_time) if total_processing_time > 0 else 0.0
+    # Velocidad real: frames leídos entre el tiempo total (incluye leer y decodificar el video)
+    avg_fps = (frame_idx / total_elapsed) if total_elapsed > 0 else 0.0
 
     video_s = frame_idx / fps if fps else 0.0
     vm, vs = divmod(int(round(video_s)), 60)
@@ -623,7 +624,7 @@ def main():
     print(f" Salidas (OUT)  : {counts['out']}")
     print("-" * 50)
     print(f" Velocidad      : {avg_fps:.1f} FPS (video a {fps:.0f} FPS, tiempo real: {tiempo_real})")
-    print(f" Tiempo total   : {total_time_str}")
+    print(f" Tiempo total   : {total_time_str}" + (f" (para {vm:02d}:{vs:02d} de video)" if args.video else ""))
     if out is not None:
         print(f" Video anotado  : {args.output}")
     if events_file is not None:
