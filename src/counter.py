@@ -302,11 +302,11 @@ class BeeCounterHybrid:
     """
 
     def __init__(self, roi_center, roi_radius, cancel_s=0.5, proj_min_speed=1.5, in_back_project=False,
-                 flash_exits=False, **kw):
+                 flash_exits=False, track_scale=None, **kw):
         self._in = BeeCounterV2(roi_center, roi_radius, back_project=in_back_project, **kw)
         self._out = BeeCounterCross(roi_center, roi_radius, cancel_s=cancel_s,
                                     proj_min_speed=float("inf") if flash_exits else proj_min_speed, **kw)
-        self._flash = FlashExits(roi_center, roi_radius) if flash_exits else None
+        self._flash = FlashExits(roi_center, roi_radius, scale=track_scale) if flash_exits else None
         self.events = []
         self.counted = set()
         self.in_count = 0
@@ -340,10 +340,10 @@ class FlashExits:
     uno o dos frames, a unos 250 px de distancia entre uno y otro. El tracker no crea un
     ID con eso (pide dos detecciones seguidas con confianza alta), así que esa salida
     se perdía. Aquí se buscan esas manchas:
-      1. Detección entre `r_min` y `r_max` radios del centro, que no está a menos de
-         `near` radios de una abeja rastreada en ese frame.
+      1. Detección fuera de la ROI (hasta `r_max - 1` escalas del tracker más allá del borde),
+         que no está a menos de `near` escalas de una abeja rastreada en ese frame.
       2. Las detecciones así se enlazan en "trazos" (a lo sumo `max_gap_s` entre una y
-         otra y `max_speed` radios/s).
+         otra y `max_speed` escalas/s).
       3. Un trazo de `max_hits` detecciones o menos que no se acerca a la piquera es una
          salida, con el tiempo y la posición de su primera detección.
       4. Se descarta si el contador de cruces ya contó una salida a menos de `dedup_s`
@@ -353,12 +353,17 @@ class FlashExits:
     `max_hits` y `max_gap_s`.
     """
 
-    def __init__(self, roi_center, roi_radius, r_min=1.0, r_max=2.5, near=0.4, max_gap_s=0.04,
+    def __init__(self, roi_center, roi_radius, scale=None, r_min=1.0, r_max=2.5, near=0.4, max_gap_s=0.04,
                  max_speed=84.0, max_hits=3, inward=0.1, dedup_s=0.4, dedup_deg=40.0, hold_s=1.5):
+        """scale: px de la escala del tracker (--track-scale); por defecto el radio de la ROI.
+        La zona de búsqueda va desde el borde de la ROI hasta (r_max - 1) escalas más afuera."""
         self.c = np.array(roi_center, dtype=float)
         self.r = float(roi_radius)
-        self.r_min, self.r_max, self.near = r_min, r_max, near * self.r
-        self.max_gap_s, self.max_speed, self.max_hits = max_gap_s, max_speed * self.r, max_hits
+        s = self.r if scale is None else float(scale)
+        self.d_min = r_min * self.r
+        self.d_max = self.r + (r_max - 1.0) * s
+        self.near = near * s
+        self.max_gap_s, self.max_speed, self.max_hits = max_gap_s, max_speed * s, max_hits
         self.inward, self.dedup_s, self.dedup_deg, self.hold_s = inward, dedup_s, dedup_deg, hold_s
         self._open = []      # trazos abiertos: listas de (t, x, y, d)
         self._cand = []      # salidas candidatas (t, x, y), esperando hold_s
@@ -386,7 +391,7 @@ class FlashExits:
         for det in detections:
             x, y = float(det[0]), float(det[1])
             d = float(np.hypot(x - self.c[0], y - self.c[1])) / self.r
-            if not self.r_min <= d <= self.r_max:
+            if not self.d_min <= d * self.r <= self.d_max:
                 continue
             if any(np.hypot(x - p[0], y - p[1]) < self.near for p in seen):
                 continue

@@ -231,6 +231,9 @@ def main():
     parser.add_argument("--proj-min-speed", type=float, default=1.5,
                         help="hibrido: velocidad mínima (radios/s) para proyectar fuera de la ROI un track que se cierra. "
                              "Mayor = menos salidas falsas y menos salidas detectadas")
+    parser.add_argument("--track-scale", type=float, default=None,
+                        help="v2: px que usa el tracker como unidad de distancia (defecto: --roi-r). Permite achicar "
+                             "el círculo de conteo sin que el tracker parta una abeja en dos (p. ej. --roi-r 100 --track-scale 220)")
     parser.add_argument("--flash-exits", action="store_true",
                         help="hibrido: contar también las salidas que FOMO solo ve 1-3 frames (despegues borrosos) "
                              "y no proyectar fuera de la ROI los tracks que se cierran")
@@ -254,6 +257,7 @@ def main():
     args = parser.parse_args()
 
     use_v2 = args.tracker == "v2"
+    track_scale = args.track_scale or args.roi_r
     if args.flash_exits and not (use_v2 and args.counter == "hibrido"):
         parser.error("--flash-exits necesita --tracker v2 --counter hibrido")
 
@@ -302,13 +306,13 @@ def main():
 
     if use_v2:
         # Todas las distancias del tracker v2 se miden en radios de la ROI
-        tracker = BeeTracker(scale=args.roi_r, max_lost_s=args.max_lost, birth_min_prob=args.threshold,
+        tracker = BeeTracker(scale=track_scale, max_lost_s=args.max_lost, birth_min_prob=args.threshold,
                              max_gate=args.max_gate, accel_std=args.accel_std,
                              max_gate_tentative=args.max_gate_tentative)
         if args.counter == "hibrido":
             counter = BeeCounterHybrid(roi_center=(args.roi_x, args.roi_y), roi_radius=args.roi_r,
                                        cancel_s=args.cancel_s, proj_min_speed=args.proj_min_speed,
-                                       flash_exits=args.flash_exits)
+                                       flash_exits=args.flash_exits, track_scale=track_scale)
         else:
             counter = BeeCounterV2(roi_center=(args.roi_x, args.roi_y), roi_radius=args.roi_r)
     else:
@@ -405,7 +409,7 @@ def main():
 
         if use_v2:
             # 1. Inferencia FOMO + agrupación relativa al tamaño de la ROI
-            centroids = cluster_centroids(detector.detect_raw(frame), merge_radius=0.25 * args.roi_r)
+            centroids = cluster_centroids(detector.detect_raw(frame), merge_radius=0.25 * track_scale)
             # 2. Tracking con el tiempo real del frame
             active, finished = tracker.update(centroids, t_frame)
             # 3. Conteo origen-destino

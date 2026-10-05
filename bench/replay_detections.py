@@ -40,6 +40,7 @@ def main():
     ap.add_argument("--cancel-s", type=float, default=0.5)
     ap.add_argument("--proj-min-speed", type=float, default=1.5)
     ap.add_argument("--flash-exits", action="store_true")
+    ap.add_argument("--track-scale", type=float, default=None)
     a = ap.parse_args()
 
     with gzip.open(a.dets, "rt", encoding="utf-8") as f:
@@ -51,18 +52,19 @@ def main():
                          f"hace falta <= {det_threshold}")
     fps = info["fps"]
 
-    tracker = BeeTracker(scale=a.roi_r, max_lost_s=a.max_lost, birth_min_prob=a.threshold,
+    track_scale = a.track_scale or a.roi_r
+    tracker = BeeTracker(scale=track_scale, max_lost_s=a.max_lost, birth_min_prob=a.threshold,
                          max_gate=a.max_gate, accel_std=a.accel_std, max_gate_tentative=a.max_gate_tentative)
     if a.counter == "hibrido":
         counter = BeeCounterHybrid(roi_center=(a.roi_x, a.roi_y), roi_radius=a.roi_r,
                                    cancel_s=a.cancel_s, proj_min_speed=a.proj_min_speed,
-                                   flash_exits=a.flash_exits)
+                                   flash_exits=a.flash_exits, track_scale=track_scale)
     else:
         counter = BeeCounterV2(roi_center=(a.roi_x, a.roi_y), roi_radius=a.roi_r)
 
     for i, frame_dets in enumerate(data["dets"]):
         raw = [tuple(d) for d in frame_dets if d[2] > det_threshold]
-        centroids = cluster_centroids(raw, merge_radius=0.25 * a.roi_r)
+        centroids = cluster_centroids(raw, merge_radius=0.25 * track_scale)
         active, finished = tracker.update(centroids, i / fps)
         if a.flash_exits:
             counter.update(active, finished, detections=centroids, t=i / fps)

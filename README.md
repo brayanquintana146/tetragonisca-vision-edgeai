@@ -515,6 +515,7 @@ python main.py --video "examples/videos/0040-1.mp4" --roi-x 900 --roi-y 600 --ro
 - `--crop-roi`: recorta un cuadrado (lado corto del frame) centrado en la ROI antes del modelo, igual que *Fit shortest axis* de Edge Impulse. Sin esta opción el frame completo se aplasta a 320×320.
 - `--counter`: `v2` (una entrada/salida por track, por defecto) o `hibrido` (cuenta cada salida que cruza el borde y las entradas como v2). Ver [TRACKING_ALGORITHM.md](docs/TRACKING_ALGORITHM.md).
 - `--max-gate`, `--max-gate-tentative`, `--accel-std`, `--max-lost`, `--cancel-s`, `--proj-min-speed`: ajustes del tracker y del contador híbrido (en radios de la ROI y segundos).
+- `--track-scale`: px que el tracker usa como unidad de distancia (por defecto, `--roi-r`). Sirve para achicar el círculo de conteo sin que el tracker parta una abeja en dos detecciones. Por ejemplo, `--roi-r 100 --track-scale 220` cuenta en un círculo chico y sigue a las abejas como con radio 220. Conviene que sea parecido al radio usado en el `0040-1` en relación al tamaño de la abeja.
 - `--flash-exits`: con `--counter hibrido`, cuenta también las salidas que FOMO solo ve en 1–3 frames (despegues borrosos) y deja de proyectar los tracks que se cierran. Estas salidas aparecen en el contador con ~1.5 s de retraso y con ID `-1` en el CSV. Ver [TRACKING_ALGORITHM.md](docs/TRACKING_ALGORITHM.md).
 - `--events`: CSV con cada evento IN/OUT (tiempo, ID, posición).
 - `--show`: Muestra la ventana visual de OpenCV con rastreos interpolados.
