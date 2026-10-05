@@ -445,10 +445,14 @@ def main():
         if need_render:
             # 4. Renderizado visual (Piquera, IDs, Trayectorias y HUD)
             # Círculo virtual de la piquera
-            cv2.circle(frame, (args.roi_x, args.roi_y), args.roi_r, (0, 255, 255), 2)
+            # Borde negro debajo de cada círculo: se ven sobre corteza, tela o madera clara
+            cv2.circle(frame, (args.roi_x, args.roi_y), args.roi_r, (0, 0, 0), 5)
+            cv2.circle(frame, (args.roi_x, args.roi_y), args.roi_r, (0, 255, 255), 3)
             if args.core:
                 # Boca de la piquera (--core): las abejas deben pasar por aquí para contar
-                cv2.circle(frame, (args.roi_x, args.roi_y), int(args.core * args.roi_r), (0, 165, 255), 1)
+                rc = int(args.core * args.roi_r)
+                cv2.circle(frame, (args.roi_x, args.roi_y), rc, (0, 0, 0), 4)
+                cv2.circle(frame, (args.roi_x, args.roi_y), rc, (255, 0, 255), 2)
             cv2.circle(frame, (args.roi_x, args.roi_y), 4, (0, 255, 255), -1)
             if args.crop_roi:
                 # Región que ve el modelo; fuera de ella no hay detecciones
