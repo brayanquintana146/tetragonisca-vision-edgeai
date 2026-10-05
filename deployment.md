@@ -182,6 +182,23 @@ sudo shutdown -h now
 ```
 *(Espera unos 10 segundos a que la luz verde de la placa deje de parpadear y se apague por completo antes de desenchufarla del tomacorriente).*
 
+### 5.4. Demostración con videos grabados (presentación)
+
+Mientras no haya abejas reales frente a la cámara, el conteo se demuestra con los videos grabados. No se cuenta con la cámara filmando una pantalla: el parpadeo, los reflejos y el tamaño cambian los resultados.
+
+1. **Conteo en la Pi con un video grabado.** Usa la configuración recomendada del [README](README.md). El dashboard queda en `http://pi5.local:5000`:
+```bash
+python main.py --video examples/videos/0040-1.mp4 --model models/fomo_borrosas_480_int8.lite --roi-x 900 --roi-y 600 --roi-r 220 --crop-roi --counter hibrido --max-gate 0.9 --max-gate-tentative 1.2 --accel-std 260 --threshold 0.7 --max-lost 0.3 --proj-min-speed 3.0 --flash-exits --static-s 2 --core 0.5 --cancel-s 1.0 --num-threads 4 --dashboard --output video_demo.mp4 --events eventos_demo.csv
+```
+   Con un archivo de video se procesan todos los frames: el conteo es el mismo aunque la Pi vaya más lento que el video. El modelo `fomo_borrosas_480_int8.lite` no está en git; llega a la Pi con el `scp -r models` del paso 4.2.
+
+2. **Ver el video anotado.** La Pi no tiene escritorio, así que `--show` no funciona. Copia el resultado al PC:
+```powershell
+scp pi@pi5.local:~/tetragonisca-vision-edgeai/video_demo.mp4 .
+```
+
+3. **Mostrar la cámara (opcional).** Unos segundos con el comando de cámara del paso 5.2 y `--snapshot-every 30`, solo para ver que captura y detecta. Los conteos de esa parte no se presentan.
+
 ## 6. Ejecución Automática al Arrancar (Autostart)
 
 Para que la Raspberry Pi comience a contar abejas apenas la conectes a la corriente, crearemos un servicio de `systemd`.
