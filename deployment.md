@@ -23,8 +23,8 @@ Para maximizar los recursos disponibles para la inferencia del modelo utilizarem
    - **General**:
      - Configura el **Nombre del equipo** (ej: `pi5`). En este caso el nombre será `pi5` para la Raspberry Pi 5.
      - Configurar la locaclización con la capital, la zona horaria y distrubución del teclado.
-     - Habilita y configura un **nombre de usuario y contraseña** (ej: usuario `pi`, y una contraseña segura). En este caso la contraseña será `poli`.
-     - Configura la **conexión Wi-Fi**. Configuraremos una Zona de cobertura inalambrica movil. El nombre de nuestra red será `MiLaptop-Net` y la contraseña también será `sihuyromelipo`, la banda de la red será 2.4 Ghz. 
+     - Habilita y configura un **nombre de usuario y contraseña** (ej: usuario `pi`, y una contraseña segura). Elige una contraseña propia y no la escribas en este archivo.
+     - Configura la **conexión Wi-Fi**. Configuraremos una Zona de cobertura inalambrica movil. El nombre de nuestra red será `MiLaptop-Net` con una contraseña propia (no la escribas aquí), la banda de la red será 2.4 Ghz. 
    - **Services**:
      - Habilita **SSH** (Habilitar SSH y usar autenticación por contraseña). Esto es crucial para acceder a la Raspberry Pi de forma remota sin usar monitor ni teclado. Sobre Raspberry Pi Connect, no es necesario activarlo ahora porque todo funcionará en local.
 6. **Escribir en la MicroSD**:
