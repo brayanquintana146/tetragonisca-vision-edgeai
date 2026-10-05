@@ -641,6 +641,16 @@ Las entradas no cambian en ningún video.
 
 **`0062-2M` (colmena 006).** 960×540 a 30 fps, cámara en mano. Corrida ciega con `--roi-x 425 --roi-y 228 --roi-r 60 --track-scale 110 --core 0.6 --static-s 2`: 25 salidas / 42 entradas contra el *Pseudo* 15 / 17. En el segundo 9 la cámara se mueve y se acerca, y la boca queda en el borde del círculo. El sistema supone una cámara fija, así que este video (y los demás de la 006, todos en mano) no sirve para medir el conteo.
 
-**Conclusión.** Solo hay una prueba válida en una colmena nueva (`0020-1`) y falló en las salidas. Para medir de verdad la generalización, el siguiente paso es dejar una colmena fuera del entrenamiento (*leave-one-hive-out*): primero la 005, evaluando en el `00517-18`.
+**`00517-18` con el modelo sin la colmena 005 (v7, *leave-one-hive-out*), corrida única.** Misma configuración para los dos modelos: `--roi-x 1032 --roi-y 700 --roi-r 180 --track-scale 220 --core 0.7 --static-s 2`.
+
+| `00517-18` | Salidas | Entradas |
+| :--- | :---: | :---: |
+| *Pseudo* (paper) | 16 | 30 |
+| v5 (vio la colmena 005) | 19 | 32 |
+| **v7 (nunca vio la colmena 005)** | **34** | **31** |
+
+Las entradas casi no cambian (31 contra 32), así que el detector reconoce a las abejas de una colmena nueva. Las salidas suben de 19 a 34: 26 son salidas fugaces y 18 de ellas salen de solo 4 puntos fijos del fondo, por ejemplo 8 veces de (753, 1035). Son falsos positivos del detector sobre un fondo que no conoce, el mismo tipo de error que la sombra del `0020-1`. Esos puntos reaparecen con más de 2 s de separación, así que `--static-s 2` no los filtra.
+
+**Conclusión.** En las dos colmenas nuevas (`0020-1` y la 005 con el modelo v7), las **entradas** quedan cerca de la referencia y las **salidas** se inflan por falsos positivos del detector en puntos fijos del fondo. Eso sugiere que, al instalar el sistema en una colmena nueva, la calibración debe incluir fotos del fondo de esa piquera sin abejas (clase negativa) y no solo ajustar la ROI.
 
 Los siguientes pasos están en [`docs/PENDIENTES.md`](docs/PENDIENTES.md).
