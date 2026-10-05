@@ -40,6 +40,26 @@ Además, el umbral `max_distance` se aplicaba **después** del Algoritmo Húngar
 
 Los valores por defecto de `main.py` no cambian (`--counter v2`, `--max-gate 1.2`, `--accel-std 40`).
 
+### Salidas fugaces (`--flash-exits`, `src/counter.py::FlashExits`)
+
+**Problema:** al revisar una por una las 78 salidas del `0040-1` con el modelo 480, la abeja que despega aparece como una mancha borrosa fuera de la piquera en solo 1–2 frames, a unos 250 px entre uno y otro. El tracker pide dos detecciones seguidas con confianza ≥ `--threshold` para crear un ID, así que esa salida no se contaba. Además, 43 de las 80 salidas contadas eran falsas, sobre todo por proyectar fuera de la ROI tracks que se pierden cerca del borde.
+
+**Regla:**
+1. Una detección entre 1.0 y 2.5 radios del centro que no está a menos de 0.4 radios de una abeja rastreada en ese frame es candidata.
+2. Las candidatas se enlazan en trazos (hasta 0.04 s entre una y otra, hasta 84 radios/s).
+3. Un trazo de 3 detecciones o menos que no se acerca a la piquera es una salida, con el tiempo y la posición de su primera detección.
+4. Se descarta si el contador de cruces ya contó una salida a menos de 0.4 s y 40°. Por eso cada salida se decide 1.5 s después.
+5. Con esta opción se apaga la proyección de las salidas al cerrarse un track.
+
+**Resultado** (minuto completo del `0040-1`, modelo 480, medición estricta, mismos ajustes del tracker):
+
+| | Bien / contadas | Reales | F1 | F1 azar |
+|---|---|---|---|---|
+| Sin `--flash-exits` | 37 / 80 | 78 | 0.47 | 0.27 |
+| Con `--flash-exits` | 49 / 65 | 78 | 0.69 | 0.39 |
+
+Las entradas no cambian (F1 0.87). Con las detecciones del modelo v4 sube de 0.52 a 0.58. La regla se diseñó con este mismo minuto y a 60 fps: falta confirmarla con otro video anotado y revisar `max_hits` y `max_gap_s` a los 30 fps de la C930e.
+
 ### Cómo se evalúa el conteo
 
 Se compara evento por evento contra `data/gt_0040-1.csv` con `bench/compare_events.py`. Hay dos cuidados importantes:

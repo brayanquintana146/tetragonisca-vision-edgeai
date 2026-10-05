@@ -294,22 +294,34 @@ class BeeCounterHybrid:
     borde, así que se mantiene la regla de una entrada por track, sin proyectar
     hacia atrás el nacimiento (`in_back_project=False`), que también las reducía.
     Expone la misma interfaz que BeeCounterV2 (update, events, in_count, out_count).
+
+    Con `flash_exits=True` suma las salidas de FlashExits (abejas que despegan y FOMO
+    solo ve 1-3 frames) y deja de proyectar fuera de la ROI los tracks que se cierran:
+    esa proyección daba la mayoría de las salidas falsas. Hay que pasarle a update()
+    las detecciones del frame y su tiempo, y llamar update(..., final=True) al terminar.
     """
 
-    def __init__(self, roi_center, roi_radius, cancel_s=0.5, proj_min_speed=1.5, in_back_project=False, **kw):
+    def __init__(self, roi_center, roi_radius, cancel_s=0.5, proj_min_speed=1.5, in_back_project=False,
+                 flash_exits=False, **kw):
         self._in = BeeCounterV2(roi_center, roi_radius, back_project=in_back_project, **kw)
-        self._out = BeeCounterCross(roi_center, roi_radius, cancel_s=cancel_s, proj_min_speed=proj_min_speed, **kw)
+        self._out = BeeCounterCross(roi_center, roi_radius, cancel_s=cancel_s,
+                                    proj_min_speed=float("inf") if flash_exits else proj_min_speed, **kw)
+        self._flash = FlashExits(roi_center, roi_radius) if flash_exits else None
         self.events = []
         self.counted = set()
         self.in_count = 0
         self.out_count = 0
 
-    def update(self, active_tracks, finished_tracks=()):
+    def update(self, active_tracks, finished_tracks=(), detections=None, t=None, final=False):
         n_in, n_out = len(self._in.events), len(self._out.events)
         self._in.update(active_tracks, finished_tracks)
         self._out.update(active_tracks, finished_tracks)
         new = [e for e in self._in.events[n_in:] if e[1] == "in"]
         new += [e for e in self._out.events[n_out:] if e[1] == "out"]
+        if self._flash is not None:
+            if detections is not None:
+                self._flash.observe(detections, active_tracks, t)
+            new += self._flash.collect(self._out.events, t, final=final)
         for e in sorted(new):
             self.events.append(e)
             self.counted.add(e[2])
@@ -318,3 +330,92 @@ class BeeCounterHybrid:
             else:
                 self.out_count += 1
         return {"in": self.in_count, "out": self.out_count}
+
+
+class FlashExits:
+    """
+    Salidas de abejas que despegan tan rápido que FOMO solo las ve en 1-3 frames.
+
+    Al despegar, la abeja sale borrosa: aparece como una mancha fuera de la piquera en
+    uno o dos frames, a unos 250 px de distancia entre uno y otro. El tracker no crea un
+    ID con eso (pide dos detecciones seguidas con confianza alta), así que esa salida
+    se perdía. Aquí se buscan esas manchas:
+      1. Detección entre `r_min` y `r_max` radios del centro, que no está a menos de
+         `near` radios de una abeja rastreada en ese frame.
+      2. Las detecciones así se enlazan en "trazos" (a lo sumo `max_gap_s` entre una y
+         otra y `max_speed` radios/s).
+      3. Un trazo de `max_hits` detecciones o menos que no se acerca a la piquera es una
+         salida, con el tiempo y la posición de su primera detección.
+      4. Se descarta si el contador de cruces ya contó una salida a menos de `dedup_s`
+         y `dedup_deg` grados (es la misma abeja). Por eso cada salida se decide
+         `hold_s` segundos después, cuando el contador de cruces ya habló.
+    Los valores se eligieron con el video 0040-1 a 60 fps: a otros FPS hay que revisar
+    `max_hits` y `max_gap_s`.
+    """
+
+    def __init__(self, roi_center, roi_radius, r_min=1.0, r_max=2.5, near=0.4, max_gap_s=0.04,
+                 max_speed=84.0, max_hits=3, inward=0.1, dedup_s=0.4, dedup_deg=40.0, hold_s=1.5):
+        self.c = np.array(roi_center, dtype=float)
+        self.r = float(roi_radius)
+        self.r_min, self.r_max, self.near = r_min, r_max, near * self.r
+        self.max_gap_s, self.max_speed, self.max_hits = max_gap_s, max_speed * self.r, max_hits
+        self.inward, self.dedup_s, self.dedup_deg, self.hold_s = inward, dedup_s, dedup_deg, hold_s
+        self._open = []      # trazos abiertos: listas de (t, x, y, d)
+        self._cand = []      # salidas candidatas (t, x, y), esperando hold_s
+        self._done = []      # salidas aceptadas (t, x, y)
+
+    def _ang(self, x, y):
+        return np.degrees(np.arctan2(y - self.c[1], x - self.c[0]))
+
+    def _close(self, tl):
+        if len(tl) > self.max_hits:
+            return
+        if len(tl) >= 2 and tl[-1][3] < tl[0][3] - self.inward:
+            return           # se acerca a la piquera: es una abeja que llega
+        self._cand.append(tl[0][:3])
+
+    def observe(self, detections, active_tracks, t):
+        seen = [tr.last_hit_pos for tr in active_tracks if tr.t_last_hit == t]
+        keep = []
+        for tl in self._open:
+            if t - tl[-1][0] > self.max_gap_s:
+                self._close(tl)
+            else:
+                keep.append(tl)
+        self._open = keep
+        for det in detections:
+            x, y = float(det[0]), float(det[1])
+            d = float(np.hypot(x - self.c[0], y - self.c[1])) / self.r
+            if not self.r_min <= d <= self.r_max:
+                continue
+            if any(np.hypot(x - p[0], y - p[1]) < self.near for p in seen):
+                continue
+            best = None
+            for tl in self._open:
+                dt = t - tl[-1][0]
+                dd = float(np.hypot(x - tl[-1][1], y - tl[-1][2]))
+                if 0 < dt <= self.max_gap_s and dd <= self.max_speed * dt and (best is None or dd < best[0]):
+                    best = (dd, tl)
+            if best is not None:
+                best[1].append((t, x, y, d))
+            else:
+                self._open.append([(t, x, y, d)])
+
+    def collect(self, out_events, t, final=False):
+        """Devuelve los eventos (t, "out", -1, x, y) ya decididos."""
+        if final:
+            for tl in self._open:
+                self._close(tl)
+            self._open = []
+        ready = [c for c in self._cand if final or (t is not None and t - c[0] >= self.hold_s)]
+        self._cand = [c for c in self._cand if c not in ready]
+        new = []
+        for tc, x, y in sorted(ready):
+            a = self._ang(x, y)
+            prev = [(e[0], e[3], e[4]) for e in out_events if e[1] == "out"] + self._done
+            if any(abs(te - tc) < self.dedup_s and abs((self._ang(px, py) - a + 180) % 360 - 180) < self.dedup_deg
+                   for te, px, py in prev):
+                continue
+            self._done.append((tc, x, y))
+            new.append((tc, "out", -1, x, y))
+        return new

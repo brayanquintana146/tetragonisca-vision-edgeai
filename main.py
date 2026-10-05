@@ -231,6 +231,9 @@ def main():
     parser.add_argument("--proj-min-speed", type=float, default=1.5,
                         help="hibrido: velocidad mínima (radios/s) para proyectar fuera de la ROI un track que se cierra. "
                              "Mayor = menos salidas falsas y menos salidas detectadas")
+    parser.add_argument("--flash-exits", action="store_true",
+                        help="hibrido: contar también las salidas que FOMO solo ve 1-3 frames (despegues borrosos) "
+                             "y no proyectar fuera de la ROI los tracks que se cierran")
     parser.add_argument("--accel-std", type=float, default=40.0,
                         help="v2: aceleración típica de una abeja (radios/s²). Mayor = sigue mejor los despegues bruscos")
     parser.add_argument("--max-disappeared", type=int, default=20, help="v1: frames tolerados sin deteccion antes de perder ID")
@@ -251,6 +254,8 @@ def main():
     args = parser.parse_args()
 
     use_v2 = args.tracker == "v2"
+    if args.flash_exits and not (use_v2 and args.counter == "hibrido"):
+        parser.error("--flash-exits necesita --tracker v2 --counter hibrido")
 
     # Inicializar detector FOMO con LiteRT (v2 usa un umbral bajo y filtra después)
     det_threshold = min(args.threshold, args.assoc_threshold) if use_v2 else args.threshold
@@ -302,7 +307,8 @@ def main():
                              max_gate_tentative=args.max_gate_tentative)
         if args.counter == "hibrido":
             counter = BeeCounterHybrid(roi_center=(args.roi_x, args.roi_y), roi_radius=args.roi_r,
-                                       cancel_s=args.cancel_s, proj_min_speed=args.proj_min_speed)
+                                       cancel_s=args.cancel_s, proj_min_speed=args.proj_min_speed,
+                                       flash_exits=args.flash_exits)
         else:
             counter = BeeCounterV2(roi_center=(args.roi_x, args.roi_y), roi_radius=args.roi_r)
     else:
@@ -403,7 +409,10 @@ def main():
             # 2. Tracking con el tiempo real del frame
             active, finished = tracker.update(centroids, t_frame)
             # 3. Conteo origen-destino
-            counts = counter.update(active, finished)
+            if args.flash_exits:
+                counts = counter.update(active, finished, detections=centroids, t=t_frame)
+            else:
+                counts = counter.update(active, finished)
             objects = {tr.id: tr.pos for tr in active if tr.misses <= 2}
             if events_writer is not None:
                 for ev in counter.events[n_events_written:]:
@@ -563,7 +572,8 @@ def main():
 
     # Cerrar los tracks abiertos al terminar (conteo de las abejas del último instante)
     if use_v2:
-        counts = counter.update([], tracker.flush())
+        counts = counter.update([], tracker.flush(), final=True) if args.flash_exits \
+            else counter.update([], tracker.flush())
         total_ids = tracker.confirmed_total
         if events_writer is not None:
             for ev in counter.events[n_events_written:]:

@@ -39,6 +39,7 @@ def main():
     ap.add_argument("--counter", choices=["v2", "hibrido"], default="v2")
     ap.add_argument("--cancel-s", type=float, default=0.5)
     ap.add_argument("--proj-min-speed", type=float, default=1.5)
+    ap.add_argument("--flash-exits", action="store_true")
     a = ap.parse_args()
 
     with gzip.open(a.dets, "rt", encoding="utf-8") as f:
@@ -54,15 +55,23 @@ def main():
                          max_gate=a.max_gate, accel_std=a.accel_std, max_gate_tentative=a.max_gate_tentative)
     if a.counter == "hibrido":
         counter = BeeCounterHybrid(roi_center=(a.roi_x, a.roi_y), roi_radius=a.roi_r,
-                                   cancel_s=a.cancel_s, proj_min_speed=a.proj_min_speed)
+                                   cancel_s=a.cancel_s, proj_min_speed=a.proj_min_speed,
+                                   flash_exits=a.flash_exits)
     else:
         counter = BeeCounterV2(roi_center=(a.roi_x, a.roi_y), roi_radius=a.roi_r)
 
     for i, frame_dets in enumerate(data["dets"]):
         raw = [tuple(d) for d in frame_dets if d[2] > det_threshold]
-        active, finished = tracker.update(cluster_centroids(raw, merge_radius=0.25 * a.roi_r), i / fps)
-        counter.update(active, finished)
-    counter.update([], tracker.flush())
+        centroids = cluster_centroids(raw, merge_radius=0.25 * a.roi_r)
+        active, finished = tracker.update(centroids, i / fps)
+        if a.flash_exits:
+            counter.update(active, finished, detections=centroids, t=i / fps)
+        else:
+            counter.update(active, finished)
+    if a.flash_exits:
+        counter.update([], tracker.flush(), final=True)
+    else:
+        counter.update([], tracker.flush())
 
     with open(a.events, "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
