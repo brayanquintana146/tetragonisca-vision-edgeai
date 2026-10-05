@@ -623,8 +623,7 @@ def main():
     print(f" Entradas (IN)  : {counts['in']}")
     print(f" Salidas (OUT)  : {counts['out']}")
     print("-" * 50)
-    print(f" Procesa        : {avg_fps:.1f} imágenes/s (el video trae {fps:.0f} imágenes/s)")
-    print(f" ¿Va al ritmo?  : {'sí, alcanza al video' if tiempo_real == 'sí' else 'no, tarda más que el video'}")
+    print(f" Procesamiento  : {avg_fps:.1f} FPS (video a {fps:.0f} FPS, tiempo real: {tiempo_real})")
     print(f" Tiempo total   : {total_time_str}" + (f" (para {vm:02d}:{vs:02d} de video)" if args.video else ""))
     if out is not None:
         print(f" Video anotado  : {args.output}")
