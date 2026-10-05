@@ -41,6 +41,7 @@ def main():
     ap.add_argument("--proj-min-speed", type=float, default=1.5)
     ap.add_argument("--flash-exits", action="store_true")
     ap.add_argument("--track-scale", type=float, default=None)
+    ap.add_argument("--core", type=float, default=None)
     a = ap.parse_args()
 
     with gzip.open(a.dets, "rt", encoding="utf-8") as f:
@@ -58,7 +59,8 @@ def main():
     if a.counter == "hibrido":
         counter = BeeCounterHybrid(roi_center=(a.roi_x, a.roi_y), roi_radius=a.roi_r,
                                    cancel_s=a.cancel_s, proj_min_speed=a.proj_min_speed,
-                                   flash_exits=a.flash_exits, track_scale=track_scale)
+                                   flash_exits=a.flash_exits, track_scale=track_scale,
+                                   core=a.core)
     else:
         counter = BeeCounterV2(roi_center=(a.roi_x, a.roi_y), roi_radius=a.roi_r)
 

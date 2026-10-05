@@ -299,14 +299,24 @@ class BeeCounterHybrid:
     solo ve 1-3 frames) y deja de proyectar fuera de la ROI los tracks que se cierran:
     esa proyección daba la mayoría de las salidas falsas. Hay que pasarle a update()
     las detecciones del frame y su tiempo, y llamar update(..., final=True) al terminar.
+
+    Con `core` (fracción del radio, p. ej. 0.5) una salida solo cuenta si la abeja pasó por
+    el centro de la ROI (la boca de la piquera) desde su salida anterior, y una entrada
+    solo si la abeja llega a ese centro. Así no cuentan las guardianas que vuelan frente
+    a la piquera y cruzan el borde del círculo sin llegar a la boca.
     """
 
     def __init__(self, roi_center, roi_radius, cancel_s=0.5, proj_min_speed=1.5, in_back_project=False,
-                 flash_exits=False, track_scale=None, **kw):
+                 flash_exits=False, track_scale=None, core=None, **kw):
         self._in = BeeCounterV2(roi_center, roi_radius, back_project=in_back_project, **kw)
         self._out = BeeCounterCross(roi_center, roi_radius, cancel_s=cancel_s,
                                     proj_min_speed=float("inf") if flash_exits else proj_min_speed, **kw)
         self._flash = FlashExits(roi_center, roi_radius, scale=track_scale) if flash_exits else None
+        self._c = np.array(roi_center, dtype=float)
+        self._core = None if not core else core * float(roi_radius)
+        self._core_t = {}      # track id -> tiempos en que estuvo dentro del centro
+        self._last_out = {}    # track id -> tiempo de su última salida aceptada
+        self._in_wait = {}     # track id -> entrada esperando que la abeja llegue al centro
         self.events = []
         self.counted = set()
         self.in_count = 0
@@ -318,6 +328,8 @@ class BeeCounterHybrid:
         self._out.update(active_tracks, finished_tracks)
         new = [e for e in self._in.events[n_in:] if e[1] == "in"]
         new += [e for e in self._out.events[n_out:] if e[1] == "out"]
+        if self._core is not None:
+            new = self._gate_core(new, active_tracks, finished_tracks, final)
         if self._flash is not None:
             if detections is not None:
                 self._flash.observe(detections, active_tracks, t)
@@ -330,6 +342,34 @@ class BeeCounterHybrid:
             else:
                 self.out_count += 1
         return {"in": self.in_count, "out": self.out_count}
+
+    def _gate_core(self, new, active_tracks, finished_tracks, final):
+        for tr in list(active_tracks) + list(finished_tracks):
+            if np.linalg.norm(tr.last_hit_pos - self._c) < self._core:
+                times = self._core_t.setdefault(tr.id, [])
+                if not times or times[-1] != tr.t_last_hit:
+                    times.append(tr.t_last_hit)
+        keep = []
+        for e in new:
+            times = self._core_t.get(e[2], [])
+            if e[1] == "out":
+                prev = self._last_out.get(e[2], -1e9)
+                if any(prev < tc <= e[0] for tc in times):
+                    self._last_out[e[2]] = e[0]
+                    keep.append(e)
+            else:
+                self._in_wait[e[2]] = e
+        done = {tr.id for tr in finished_tracks}
+        for tid, e in list(self._in_wait.items()):
+            if any(tc >= e[0] - 0.5 for tc in self._core_t.get(tid, [])):
+                keep.append(e)
+                del self._in_wait[tid]
+            elif tid in done or final:
+                del self._in_wait[tid]
+        for tid in done:
+            self._core_t.pop(tid, None)
+            self._last_out.pop(tid, None)
+        return keep
 
 
 class FlashExits:

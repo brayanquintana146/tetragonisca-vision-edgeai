@@ -234,6 +234,10 @@ def main():
     parser.add_argument("--track-scale", type=float, default=None,
                         help="v2: px que usa el tracker como unidad de distancia (defecto: --roi-r). Permite achicar "
                              "el círculo de conteo sin que el tracker parta una abeja en dos (p. ej. --roi-r 100 --track-scale 220)")
+    parser.add_argument("--core", type=float, default=None,
+                        help="hibrido: fracción del radio que es la boca de la piquera (p. ej. 0.5). Una salida solo cuenta "
+                             "si la abeja pasó por ahí y una entrada solo si llega ahí; no cuentan las guardianas que vuelan "
+                             "frente a la piquera")
     parser.add_argument("--flash-exits", action="store_true",
                         help="hibrido: contar también las salidas que FOMO solo ve 1-3 frames (despegues borrosos) "
                              "y no proyectar fuera de la ROI los tracks que se cierran")
@@ -312,7 +316,8 @@ def main():
         if args.counter == "hibrido":
             counter = BeeCounterHybrid(roi_center=(args.roi_x, args.roi_y), roi_radius=args.roi_r,
                                        cancel_s=args.cancel_s, proj_min_speed=args.proj_min_speed,
-                                       flash_exits=args.flash_exits, track_scale=track_scale)
+                                       flash_exits=args.flash_exits, track_scale=track_scale,
+                                   core=args.core)
         else:
             counter = BeeCounterV2(roi_center=(args.roi_x, args.roi_y), roi_radius=args.roi_r)
     else:
