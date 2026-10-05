@@ -23,7 +23,7 @@ Para maximizar los recursos disponibles para la inferencia del modelo utilizarem
    - **General**:
      - Configura el **Nombre del equipo** (ej: `pi5`). En este caso el nombre será `pi5` para la Raspberry Pi 5.
      - Configurar la locaclización con la capital, la zona horaria y distrubución del teclado.
-     - Habilita y configura un **nombre de usuario y contraseña** (ej: usuario `pi`, y una contraseña segura). En este caso la contraseña será `sihuyromelipo`.
+     - Habilita y configura un **nombre de usuario y contraseña** (ej: usuario `pi`, y una contraseña segura). En este caso la contraseña será `poli`.
      - Configura la **conexión Wi-Fi**. Configuraremos una Zona de cobertura inalambrica movil. El nombre de nuestra red será `MiLaptop-Net` y la contraseña también será `sihuyromelipo`, la banda de la red será 2.4 Ghz. 
    - **Services**:
      - Habilita **SSH** (Habilitar SSH y usar autenticación por contraseña). Esto es crucial para acceder a la Raspberry Pi de forma remota sin usar monitor ni teclado. Sobre Raspberry Pi Connect, no es necesario activarlo ahora porque todo funcionará en local.
@@ -109,6 +109,11 @@ Vuelve a la terminal de la Raspberry Pi (asegúrate de tener activo el entorno v
 cd ~/tetragonisca-vision-edgeai
 pip install -r requirements-pi.txt
 ```
+
+> **Solución de problemas (Sin Internet / DNS):** Si al intentar instalar las librerías obtienes un error como `Temporary failure in name resolution`, significa que la Zona de Cobertura de Windows no le está compartiendo correctamente la dirección DNS a la Raspberry Pi. Para solucionarlo rápidamente inyectando el DNS de Google, ejecuta este comando y luego vuelve a intentar instalar:
+> ```bash
+> echo "nameserver 8.8.8.8" | sudo tee /etc/resolv.conf
+> ```
 
 ## 5. Conexión de la Cámara y Prueba en Vivo
 
