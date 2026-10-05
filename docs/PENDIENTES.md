@@ -28,11 +28,22 @@ Las salidas y entradas de la tabla son con `--static-s 2`. En el `0031-2` y el `
 
 ## Pendientes (en orden)
 
+### 0. Contar a mano el `0020-1` (siguiente paso)
+
+Es la única colmena nueva válida y tiene pocos eventos (~18). Con la anotación se mide precisión, recall y F1 de la corrida ciega (`ev_0020-1.csv`, 43 salidas / 8 entradas) en una colmena que el modelo nunca vio:
+
+```powershell
+python tools/anotar_eventos.py --video "C:\Users\Brayan\Projects\all_datasets\002 - MOT\0020-1.mp4" --roi-x 570 --roi-y 815 --roi-r 180 --out data/gt_0020-1.csv
+python bench/compare_events.py data/gt_0020-1.csv ev_0020-1.csv --tol 0.5 --max-angle 40
+```
+
+Anotar mirando solo el video, sin ver el CSV del programa.
+
 ### 1. Dejar fuera la colmena 005 (*leave-one-hive-out*) — decidido el 5 oct
 
 Objetivo: tener una segunda colmena nueva para el modelo, con referencia *Pseudo*.
 
-1. **Edge Impulse:** la v5 ya está guardada como versión. En *Data acquisition*, filtrar las imágenes de la colmena 005 y desactivarlas (*Disable*), tanto en entrenamiento como en test.
+1. **Edge Impulse:** la v5 (480) y la v6 (320, F1 0.91, guardada el 5 oct) ya están como versiones. El proyecto quedó en 320: volver a poner **480×480** en *Create impulse*. En *Data acquisition*, filtrar las imágenes de la colmena 005 y desactivarlas (*Disable*), tanto en entrenamiento como en test.
 2. **Entrenar** con los mismos ajustes que la v5 (480×480, FOMO). Anotar el F1 de *Model testing* (ahora sin imágenes de la 005).
 3. **Exportar** el modelo int8 como `models/fomo_sin005_480_int8.lite`. No subirlo a git.
 4. **Correr el `00517-18` una sola vez**, con la configuración recomendada y la ROI del paper: `--roi-x 1032 --roi-y 700 --roi-r 180 --track-scale 220 --core 0.7 --static-s 2`. Correr lo mismo con el modelo v5 para comparar en igualdad de condiciones.
@@ -56,6 +67,8 @@ Ojo: la ROI y el core del `00517-18` se eligieron mirando ese video, así que es
 - **Demo:** correr el sistema en la Raspberry Pi con los videos grabados. No usar la cámara filmando un celular: el parpadeo, los reflejos y el tamaño cambian los resultados. Si se quiere mostrar la C930e, unos segundos en vivo solo para ver que captura.
 
 ### 3. Medir los FPS del modelo 480 en la Raspberry Pi 5
+
+Si no alcanza el tiempo real, probar el de 320 (`models/fomo_borrosas_320_int8.lite`, si se descargó de la v6).
 
 El resumen final de `main.py` ya dice los FPS y si alcanza el tiempo real.
 
