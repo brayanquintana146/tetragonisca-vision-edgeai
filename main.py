@@ -382,6 +382,7 @@ def main():
     total_processing_time = 0.0
     t_last = time.perf_counter()
     global_start_time = time.time()
+    t_first = None   # hora del primer frame: no cuenta el arranque de la cámara
 
     if args.show:
         win_name = "Tetragonisca Vision - Inferencia y Conteo"
@@ -412,6 +413,8 @@ def main():
             t_frame = frame_idx / fps              # tiempo del video
 
         frame_idx += 1
+        if t_first is None:
+            t_first = time.time()
 
         # Saltar frames para reducir carga de inferencia en hardware lento
         if frame_idx % args.skip_frames != 0:
@@ -584,6 +587,8 @@ def main():
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
 
+    t_last_frame = time.time()
+    cam_frames = reader.seq if reader is not None else 0
     if reader is not None:
         reader.stop()
 
@@ -613,12 +618,14 @@ def main():
     h, m = divmod(m, 60)
     total_time_str = f"{h:02d}:{m:02d}:{s:02d}" if h > 0 else f"{m:02d}:{s:02d}"
 
-    # Velocidad real: frames leídos entre el tiempo total (incluye leer y decodificar el video)
-    avg_fps = (frame_idx / total_elapsed) if total_elapsed > 0 else 0.0
+    # Velocidad real: frames procesados entre el tiempo desde el primer frame
+    # (incluye leer y decodificar el video; no incluye el arranque de la cámara)
+    t_loop = (t_last_frame - t_first) if t_first is not None else 0.0
+    avg_fps = (frame_idx / t_loop) if t_loop > 0 else 0.0
 
-    video_s = frame_idx / fps if fps else 0.0
+    video_s = t_loop if is_camera else (frame_idx / fps if fps else 0.0)
     vm, vs = divmod(int(round(video_s)), 60)
-    fuente = os.path.basename(args.video) if args.video else "cámara"
+    fuente = f"cámara {args.video}" if is_camera else os.path.basename(args.video)
     tiempo_real = "sí" if avg_fps >= fps else "no"
 
     print("\n" + "=" * 50)
@@ -629,7 +636,9 @@ def main():
     print(f" Salidas (OUT)  : {counts['out']}")
     print("-" * 50)
     print(f" Procesamiento  : {avg_fps:.1f} FPS (video a {fps:.0f} FPS, tiempo real: {tiempo_real})")
-    print(f" Tiempo total   : {total_time_str}" + (f" (para {vm:02d}:{vs:02d} de video)" if args.video else ""))
+    print(f" Tiempo total   : {total_time_str}" + ("" if is_camera else f" (para {vm:02d}:{vs:02d} de video)"))
+    if is_camera and cam_frames:
+        print(f" Cámara         : mandó {cam_frames} imágenes, se procesaron {frame_idx} ({100 * frame_idx / cam_frames:.0f}%)")
     if out is not None:
         print(f" Video anotado  : {args.output}")
     if events_file is not None:
