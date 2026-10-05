@@ -44,7 +44,7 @@ Anotar mirando solo el video, sin ver el CSV del programa.
 Objetivo: tener una segunda colmena nueva para el modelo, con referencia *Pseudo*.
 
 1. **Edge Impulse:** la v5 (480) y la v6 (320, F1 0.91, guardada el 5 oct) ya están como versiones. El proyecto quedó en 320: volver a poner **480×480** en *Create impulse*. En *Data acquisition*, filtrar las imágenes de la colmena 005 y desactivarlas (*Disable*), tanto en entrenamiento como en test.
-2. **Entrenar** con los mismos ajustes que la v5 (480×480, FOMO). Anotar el F1 de *Model testing* (ahora sin imágenes de la 005).
+2. **Entrenar** con los mismos ajustes que la v5 (480×480, FOMO). **Hecho (5 oct):** 344 de train y 50 de test desactivadas (294 imágenes `005…` + 50 fondos `bg_unknown` identificados por su fecha de subida). *Model testing*: precisión 0.98, recall 0.89, F1 0.93. Falta guardarlo como versión v7.
 3. **Exportar** el modelo int8 como `models/fomo_sin005_480_int8.lite`. No subirlo a git.
 4. **Correr el `00517-18` una sola vez**, con la configuración recomendada y la ROI del paper: `--roi-x 1032 --roi-y 700 --roi-r 180 --track-scale 220 --core 0.7 --static-s 2`. Correr lo mismo con el modelo v5 para comparar en igualdad de condiciones.
 5. **Comparar** los dos contra el *Pseudo* (16 salidas / 30 entradas). Lo que importa es cuánto empeora al quitar la colmena del entrenamiento.
