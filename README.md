@@ -599,6 +599,17 @@ python bench/compare_events.py data/gt_0040-1.csv eventos.csv --start 30 --tol 0
 | EuTrack (paper) | 100 | 121 |
 | Este proyecto, configuración recomendada | 31 | 40 |
 
+**Tercer video: `00517-18` (colmena 005), sin ajustar nada.** ROI en la boca del tubo: `--roi-x 1035 --roi-y 630 --roi-r 100 --track-scale 220`, con la configuración recomendada.
+
+| `00517-18` | Salidas | Entradas |
+| :--- | :---: | :---: |
+| *Pseudo* (paper) | 16 | 30 |
+| ByteTrack (paper) | 17 | 31 |
+| EuTrack (paper) | 20 | 34 |
+| Este proyecto | 20 | 23 |
+
+En esta colmena, más tranquila, los trackers del paper ya funcionaban bien, y este proyecto queda parecido: 4 salidas de más y 7 entradas de menos.
+
 En el `0040-1`, el paper reporta ByteTrack 29 salidas / 45 entradas y EuTrack 21 / 47; este proyecto cuenta 49 / 33 (46 y 29 correctas). Comparar totales sirve como referencia, pero no prueba aciertos: un total puede coincidir por casualidad. Ajustar más para llegar justo a 21/32 sería sobreajustar a ese video; los valores se confirman con un tercer video.
 
 Los siguientes pasos están en [`docs/PENDIENTES.md`](docs/PENDIENTES.md).

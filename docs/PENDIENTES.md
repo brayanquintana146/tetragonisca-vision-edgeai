@@ -36,7 +36,12 @@ Lo hecho hasta ahora está en el [README](../README.md) (historial del modelo, c
   - el *Pseudo* solo da totales.
 - **Resumen con los números:** `/mnt/project-files/tetragonisca/resultados_presentacion.md`.
 
-### 2. Confirmar los ajustes con un tercer video
+### 2. Confirmar los ajustes con más videos
+
+- **Hecho:** `00517-18` (colmena 005), sin tocar ajustes. Contó 20 salidas y 23 entradas; el *Pseudo* da 16 y 30. Detalle en el README.
+- **Siguiente:** otro video sin anotar con *Pseudo*, `0010-1` o `0020-1`, o anotar uno a mano para medir F1.
+
+### 2b. (detalle) Cómo probar un video nuevo
 
 - **Qué video:** uno que no se haya usado para ajustar. Si tiene *Pseudo* en el paper, mejor: `0010-1`, `0020-1`, `00517-18` o `0062-2M`.
 - **Ubicar la piquera:** con `--no-output --snapshot-every 30`, y usar `--track-scale 220` si el círculo es chico.
