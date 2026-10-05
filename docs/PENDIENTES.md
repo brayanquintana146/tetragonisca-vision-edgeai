@@ -79,7 +79,7 @@ Ojo: la ROI y el core del `00517-18` se eligieron mirando ese video, así que es
 
 **Primera medición (5 oct):** `0040-1` en la Pi 5 con la configuración recomendada, `--num-threads 4`, `--dashboard` y guardando el video (`--output`): **20.9 FPS**, 03:45 para un minuto de video, 32 entradas / 50 salidas (en el PC: 33 / 47), procesador a ~65 °C. No alcanza los 60 fps del video, pero supera los ~15 fps mínimos. Ese 20.9 era el cálculo viejo (solo detección y tracking).
 
-**Con `--no-output` (5 oct), velocidad real** (frames entre tiempo total, incluye leer el video): **44.8 FPS**, 01:20 para un minuto de video, 32 entradas / 50 salidas. Supera los 30 fps de la C930e. Falta confirmarlo con la cámara conectada (`--video 0 --cam-fps 30`, parar con Ctrl+C).
+**Con `--no-output` (5 oct), velocidad real** (frames entre tiempo total, incluye leer el video): **44.8 FPS**, 01:20 para un minuto de video, 32 entradas / 50 salidas. Supera los 30 fps de la C930e. **Con la C930e conectada (5 oct):** 1280×720 a 30 fps, `--no-output`, 1:14 de prueba: **30.0 FPS procesados, tiempo real: sí**. La Pi 5 va al ritmo de la cámara con el modelo 480. Sin abejas delante salieron 17 salidas falsas (fondo desconocido), igual que en las colmenas nuevas: en Cusco calibrar con fotos del fondo. Falta validar la exactitud del conteo a 30 fps (los resultados son con videos a 60 fps).
 
 Si no alcanza el tiempo real, probar el de 320 (`models/fomo_borrosas_320_int8.lite`, si se descargó de la v6).
 
