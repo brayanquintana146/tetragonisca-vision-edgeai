@@ -48,15 +48,17 @@ Los valores por defecto de `main.py` no cambian (`--counter v2`, `--max-gate 1.2
 1. Una detección entre 1.0 y 2.5 radios del centro que no está a menos de 0.4 radios de una abeja rastreada en ese frame es candidata.
 2. Las candidatas se enlazan en trazos (hasta 0.04 s entre una y otra, hasta 84 radios/s).
 3. Un trazo de 3 detecciones o menos que no se acerca a la piquera es una salida, con el tiempo y la posición de su primera detección.
-4. Se descarta si el contador de cruces ya contó una salida a menos de 0.4 s y 40°. Por eso cada salida se decide 1.5 s después.
-5. Con esta opción se apaga la proyección de las salidas al cerrarse un track.
+4. No cuenta si hubo una abeja rastreada fuera de la ROI cerca de ahí (0.6 escalas) en los últimos 0.5 s: es una abeja que ya andaba volando, como una guardiana que revolotea.
+5. Se descarta si el contador de cruces ya contó una salida a menos de 0.4 s y 40°. Por eso cada salida se decide 1.5 s después.
+6. Con esta opción se apaga la proyección de las salidas al cerrarse un track.
 
 **Resultado** (minuto completo del `0040-1`, modelo 480, medición estricta, mismos ajustes del tracker):
 
 | | Bien / contadas | Reales | F1 | F1 azar |
 |---|---|---|---|---|
 | Sin `--flash-exits` | 37 / 80 | 78 | 0.47 | 0.27 |
-| Con `--flash-exits` | 49 / 65 | 78 | 0.69 | 0.39 |
+| Con `--flash-exits` | 48 / 61 | 78 | 0.69 | 0.39 |
+| Con `--flash-exits --core 0.5 --cancel-s 1.0` | 46 / 49 | 78 | 0.72 | 0.40 |
 
 Las entradas no cambian (F1 0.87). Con las detecciones del modelo v4 sube de 0.52 a 0.58. La regla se diseñó con este mismo minuto y a 60 fps: falta confirmarla con otro video anotado y revisar `max_hits` y `max_gap_s` a los 30 fps de la C930e.
 
@@ -136,3 +138,7 @@ El sistema incorpora un **Conteo Inferido por Desaparición**:
 - Cuando una abeja cruza el umbral de `max_disappeared` y el tracker la elimina oficialmente, se revisa su último instante *activo*.
 - Si la trayectoria duró lo suficiente para descartar ruido temporal (`history_len >= 5`) y nunca fue contabilizada de forma directa por cruce visible, se examina su vector de velocidad final.
 - Si el vector de velocidad apunta matemáticamente **hacia afuera** de la circunferencia del ROI en el momento de desaparecer, el sistema infiere un cruce exitoso e incrementa las Salidas (OUT). Lo mismo se aplica a las entradas en ángulo ciego (IN).
+
+### Segundo video: `0031-2` (colmena 003, sin anotación propia)
+
+Solo hay totales de referencia ("Pseudo" del paper de Leocádio et al.: 21 salidas, 32 entradas), así que no se mide F1. Con la piquera en la punta del tubo (`--roi-x 855 --roi-y 465 --roi-r 100 --track-scale 220`) hay guardianas que revolotean frente al tubo y cruzan el círculo. Con `--flash-exits --core 0.5 --cancel-s 1.0` el sistema cuenta 31 salidas y 40 entradas. En el paper, ByteTrack contó 73/76 y EuTrack 100/121 en ese mismo video.

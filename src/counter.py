@@ -386,7 +386,10 @@ class FlashExits:
          otra y `max_speed` escalas/s).
       3. Un trazo de `max_hits` detecciones o menos que no se acerca a la piquera es una
          salida, con el tiempo y la posición de su primera detección.
-      4. Se descarta si el contador de cruces ya contó una salida a menos de `dedup_s`
+      4. No se usan las detecciones a menos de `recent_near` escalas de donde hubo una abeja
+         rastreada FUERA de la ROI en los últimos `recent_s` segundos: es una abeja que ya
+         andaba volando por ahí (p. ej. una guardiana que revolotea), no una que despega.
+      5. Se descarta si el contador de cruces ya contó una salida a menos de `dedup_s`
          y `dedup_deg` grados (es la misma abeja). Por eso cada salida se decide
          `hold_s` segundos después, cuando el contador de cruces ya habló.
     Los valores se eligieron con el video 0040-1 a 60 fps: a otros FPS hay que revisar
@@ -394,7 +397,8 @@ class FlashExits:
     """
 
     def __init__(self, roi_center, roi_radius, scale=None, r_min=1.0, r_max=2.5, near=0.4, max_gap_s=0.04,
-                 max_speed=84.0, max_hits=3, inward=0.1, dedup_s=0.4, dedup_deg=40.0, hold_s=1.5):
+                 max_speed=84.0, max_hits=3, inward=0.1, dedup_s=0.4, dedup_deg=40.0, hold_s=1.5,
+                 recent_s=0.5, recent_near=0.6):
         """scale: px de la escala del tracker (--track-scale); por defecto el radio de la ROI.
         La zona de búsqueda va desde el borde de la ROI hasta (r_max - 1) escalas más afuera."""
         self.c = np.array(roi_center, dtype=float)
@@ -404,6 +408,8 @@ class FlashExits:
         self.d_max = self.r + (r_max - 1.0) * s
         self.near = near * s
         self.max_gap_s, self.max_speed, self.max_hits = max_gap_s, max_speed * s, max_hits
+        self.recent_s, self.recent_near = recent_s, recent_near * s
+        self._recent = []    # (t, x, y) de abejas rastreadas fuera de la ROI
         self.inward, self.dedup_s, self.dedup_deg, self.hold_s = inward, dedup_s, dedup_deg, hold_s
         self._open = []      # trazos abiertos: listas de (t, x, y, d)
         self._cand = []      # salidas candidatas (t, x, y), esperando hold_s
@@ -428,8 +434,15 @@ class FlashExits:
             else:
                 keep.append(tl)
         self._open = keep
+        self._recent = [q for q in self._recent if t - q[0] <= self.recent_s]
+        recent = list(self._recent)
+        for tr in active_tracks:
+            if tr.t_last_hit == t and np.linalg.norm(tr.last_hit_pos - self.c) > self.r:
+                self._recent.append((t, float(tr.last_hit_pos[0]), float(tr.last_hit_pos[1])))
         for det in detections:
             x, y = float(det[0]), float(det[1])
+            if any(np.hypot(x - px, y - py) < self.recent_near for _, px, py in recent):
+                continue
             d = float(np.hypot(x - self.c[0], y - self.c[1])) / self.r
             if not self.d_min <= d * self.r <= self.d_max:
                 continue
