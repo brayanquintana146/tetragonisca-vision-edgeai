@@ -70,6 +70,21 @@ Con `--flash-exits` solo, las entradas no cambian (F1 0.87); con `--core 0.5` ba
 
 En el `0040-1`, `--core 0.5 --cancel-s 1.0` baja las salidas falsas de 13 a 3. Con `--core 0.3` casi no se cuentan entradas (3 de 36), porque en ese video las abejas no se ven justo en el centro.
 
+### Puntos quietos (`--static-s`)
+
+**Problema:** en el `0020-1` (colmena 002, que el modelo nunca vio) 36 de 43 salidas salían del cuerpo del tubo, y 24 del mismo píxel. Ahí hay una sombra que FOMO ve como abeja en algunos frames. Pasaban dos cosas: `--flash-exits` tomaba cada reaparición de la sombra como un despegue, y cuando el tracker perdía a una abeja en la boca, saltaba a la sombra y cruzaba el borde.
+
+**Regla:** con `--static-s 2`, una salida (de un cruce o fugaz) no cuenta si a menos de 0.1 escalas de su punto ya hubo una detección entre 2 s y 0.1 s antes. Una abeja que se va no sale de donde ya había algo. Está en `BeeCounterHybrid._static` y necesita las detecciones del frame, o sea `--flash-exits`.
+
+| Salidas | Sin | Con `--static-s 2` | *Pseudo* |
+| :--- | :---: | :---: | :---: |
+| `0040-1` (F1 OUT) | 49 (0.72) | 47 (0.72) | 85 |
+| `0031-2` | 31 | 25 | 21 |
+| `00517-18` | 22 | 18 | 16 |
+| `0020-1` | 43 | 16 | 7 |
+
+Las entradas no cambian. La regla se creó mirando el `0020-1`, así que ese video ya no es una prueba ciega de ella.
+
 ### Escala del tracker (`--track-scale`)
 
 El tracker mide todas sus distancias en múltiplos de una escala: cuánto puede moverse una abeja entre frames (`--max-gate`), qué tan cerca deben estar dos celdas de FOMO para ser una sola abeja (0.25 escalas) y dónde busca `--flash-exits`. Por defecto la escala es el radio de la ROI.

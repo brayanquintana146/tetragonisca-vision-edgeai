@@ -504,10 +504,10 @@ El script `main.py` levanta el modelo FOMO, establece la circunferencia virtual 
 python main.py --video "examples/videos/0040-1.mp4" --roi-x 900 --roi-y 600 --roi-r 220 --show
 ```
 
-**Configuración recomendada (5 oct 2026).** Modelo v5 (480×480) con el contador híbrido y las reglas de salidas fugaces y boca de la piquera:
+**Configuración recomendada (5 oct 2026).** Modelo v5 (480×480) con el contador híbrido y las reglas de salidas fugaces, boca de la piquera y puntos quietos (`--static-s 2`):
 
 ```powershell
-python main.py --video examples/videos/0040-1.mp4 --model models/fomo_borrosas_480_int8.lite --roi-x 900 --roi-y 600 --roi-r 220 --crop-roi --counter hibrido --max-gate 0.9 --max-gate-tentative 1.2 --accel-std 260 --threshold 0.7 --max-lost 0.3 --proj-min-speed 3.0 --flash-exits --core 0.5 --cancel-s 1.0 --output video_conteo.mp4 --events eventos.csv
+python main.py --video examples/videos/0040-1.mp4 --model models/fomo_borrosas_480_int8.lite --roi-x 900 --roi-y 600 --roi-r 220 --crop-roi --counter hibrido --max-gate 0.9 --max-gate-tentative 1.2 --accel-std 260 --threshold 0.7 --max-lost 0.3 --proj-min-speed 3.0 --flash-exits --static-s 2 --core 0.5 --cancel-s 1.0 --output video_conteo.mp4 --events eventos.csv
 ```
 
 Para otra colmena hay que ubicar la piquera primero: correr con `--no-output --snapshot-every 30` y revisar en `snapshots/` que el círculo caiga sobre la boca de la piquera. Si el círculo tiene que ser más chico que el del `0040-1`, agregar `--track-scale 220` para que el tracker no parta una abeja en dos (ver [Argumentos](#argumentos-de-configuración)).
@@ -526,6 +526,7 @@ Para otra colmena hay que ubicar la piquera primero: correr con `--no-output --s
 - `--track-scale`: px que el tracker usa como unidad de distancia (por defecto, `--roi-r`). Sirve para achicar el círculo de conteo sin que el tracker parta una abeja en dos detecciones. Por ejemplo, `--roi-r 100 --track-scale 220` cuenta en un círculo chico y sigue a las abejas como con radio 220. Conviene que sea parecido al radio usado en el `0040-1` en relación al tamaño de la abeja.
 - `--core`: con `--counter hibrido`, fracción del radio que es la boca de la piquera (p. ej. `0.5`). Una salida solo cuenta si la abeja pasó por ahí, y una entrada solo si llega ahí. Así no cuentan las guardianas que vuelan frente a la piquera y cruzan el borde del círculo. En el `0040-1` con `--flash-exits --cancel-s 1.0`, `--core 0.5` da IN 0.84 y OUT 0.72 (sin él, 0.87 y 0.69). Ver los resultados del `0031-2` en [TRACKING_ALGORITHM.md](docs/TRACKING_ALGORITHM.md).
 - `--flash-exits`: con `--counter hibrido`, cuenta también las salidas que FOMO solo ve en 1–3 frames (despegues borrosos) y deja de proyectar los tracks que se cierran. Estas salidas aparecen en el contador con ~1.5 s de retraso y con ID `-1` en el CSV. Ver [TRACKING_ALGORITHM.md](docs/TRACKING_ALGORITHM.md).
+- `--static-s`: con `--flash-exits`, descarta una salida si en su punto ya había una detección en los N segundos anteriores (recomendado `2`). Una abeja que se va no sale de donde ya había algo quieto: ese punto suele ser una sombra o una abeja parada que FOMO ve a ratos. Ver [TRACKING_ALGORITHM.md](docs/TRACKING_ALGORITHM.md).
 - `--events`: CSV con cada evento IN/OUT (tiempo, ID, posición).
 - `--show`: Muestra la ventana visual de OpenCV con rastreos interpolados.
 
@@ -611,5 +612,34 @@ python bench/compare_events.py data/gt_0040-1.csv eventos.csv --start 30 --tol 0
 En esta colmena, más tranquila, los trackers del paper ya funcionaban bien, y este proyecto queda parecido: 4 salidas de más y 7 entradas de menos.
 
 En el `0040-1`, el paper reporta ByteTrack 29 salidas / 45 entradas y EuTrack 21 / 47; este proyecto cuenta 49 / 33 (46 y 29 correctas). Comparar totales sirve como referencia, pero no prueba aciertos: un total puede coincidir por casualidad. Ajustar más para llegar justo a 21/32 sería sobreajustar a ese video; los valores se confirman con un tercer video.
+
+**Calibración por colmena.** ROI, `--core` y `--track-scale` dependen de cada piquera y se fijan mirando la imagen (y, en el despliegue, con un minuto etiquetado). El resultado de prueba tiene que medirse en otro minuto. En el `00517-18`, con la ROI del paper (`--roi-x 1032 --roi-y 700 --roi-r 180 --track-scale 220 --core 0.7`) el conteo fue 23 salidas / 32 entradas; como se calibró con el mismo minuto, no es una prueba independiente.
+
+### Prueba de generalización (5 oct 2026)
+
+**Colmenas en el entrenamiento.** Según el historial de versiones de Edge Impulse: v1 = 004 y 005, v2 suma la 001 y v3 suma la 003. Por eso el `0040-1`, el `0031-2` y el `00517-18` son videos nuevos de **colmenas conocidas**. Las únicas colmenas que el modelo nunca vio son la **002** y la **006**.
+
+**`0020-1` (colmena 002), corrida ciega única.** ROI fijada solo mirando la imagen: `--roi-x 570 --roi-y 815 --roi-r 180 --track-scale 220 --core 0.7`, configuración recomendada sin `--static-s` (todavía no existía).
+
+| `0020-1` | Salidas | Entradas |
+| :--- | :---: | :---: |
+| *Pseudo* (paper) | 7 | 11 |
+| **Este proyecto, ciego** | **43** | **8** |
+| Con `--static-s 2` (regla creada mirando este video, ya no es ciego) | 16 | 8 |
+
+36 de las 43 salidas salían del cuerpo del tubo, fuera del círculo, y 24 de un mismo píxel: una sombra bajo el tubo que FOMO ve a ratos. Cuando el tracker pierde una abeja en la boca, salta a esa sombra y cuenta una salida. La regla `--static-s 2` es general (la misma para todos los videos). Con las detecciones guardadas (`bench/replay_detections.py`):
+
+| Salidas con y sin `--static-s 2` | Sin | Con | *Pseudo* |
+| :--- | :---: | :---: | :---: |
+| `0040-1` (F1 OUT) | 49 (0.72) | 47 (0.72) | 85 |
+| `0031-2` | 31 | 25 | 21 |
+| `00517-18` (ROI del paper; detecciones con el recorte de la ROI anterior) | 22 | 18 | 16 |
+| `0020-1` | 43 | 16 | 7 |
+
+Las entradas no cambian en ningún video.
+
+**`0062-2M` (colmena 006).** 960×540 a 30 fps, cámara en mano. Corrida ciega con `--roi-x 425 --roi-y 228 --roi-r 60 --track-scale 110 --core 0.6 --static-s 2`: 25 salidas / 42 entradas contra el *Pseudo* 15 / 17. En el segundo 9 la cámara se mueve y se acerca, y la boca queda en el borde del círculo. El sistema supone una cámara fija, así que este video (y los demás de la 006, todos en mano) no sirve para medir el conteo.
+
+**Conclusión.** Solo hay una prueba válida en una colmena nueva (`0020-1`) y falló en las salidas. Para medir de verdad la generalización, el siguiente paso es dejar una colmena fuera del entrenamiento (*leave-one-hive-out*): primero la 005, evaluando en el `00517-18`.
 
 Los siguientes pasos están en [`docs/PENDIENTES.md`](docs/PENDIENTES.md).
