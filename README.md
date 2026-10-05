@@ -649,9 +649,12 @@ Las entradas no cambian en ningún video.
 | *Pseudo* (paper) | 16 | 30 |
 | v5 (vio la colmena 005) | 19 | 32 |
 | **v7 (nunca vio la colmena 005)** | **34** | **31** |
+| **v8 (v7 + 50 fotos del fondo de la 005, sin sus abejas)** | **19** | **36** |
 
 Las entradas casi no cambian (31 contra 32), así que el detector reconoce a las abejas de una colmena nueva. Las salidas suben de 19 a 34: 26 son salidas fugaces y 18 de ellas salen de solo 4 puntos fijos del fondo, por ejemplo 8 veces de (753, 1035). Son falsos positivos del detector sobre un fondo que no conoce, el mismo tipo de error que la sombra del `0020-1`. Esos puntos reaparecen con más de 2 s de separación, así que `--static-s 2` no los filtra.
 
-**Conclusión.** En las dos colmenas nuevas (`0020-1` y la 005 con el modelo v7), las **entradas** quedan cerca de la referencia y las **salidas** se inflan por falsos positivos del detector en puntos fijos del fondo. Eso sugiere que, al instalar el sistema en una colmena nueva, la calibración debe incluir fotos del fondo de esa piquera sin abejas (clase negativa) y no solo ajustar la ROI.
+**v8: agregar solo fotos del fondo.** Con la v7 más las 50 fotos del fondo de la colmena 005 (ninguna abeja de la 005), las salidas bajan de 34 a 19, igual que la v5 que sí vio sus abejas (*Pseudo*: 16). Las entradas suben de 31 a 36 (*Pseudo*: 30). Esto confirma que las salidas falsas venían del fondo desconocido y que unas pocas fotos del fondo sin abejas bastan para corregirlas.
+
+**Conclusión.** En las dos colmenas nuevas (`0020-1` y la 005 con el modelo v7), las **entradas** quedan cerca de la referencia y las **salidas** se inflan por falsos positivos del detector en puntos fijos del fondo. La v8 lo confirma: al instalar el sistema en una colmena nueva, la calibración debe incluir fotos del fondo de esa piquera sin abejas (clase negativa) y no solo ajustar la ROI.
 
 Los siguientes pasos están en [`docs/PENDIENTES.md`](docs/PENDIENTES.md).
