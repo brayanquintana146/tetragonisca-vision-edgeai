@@ -93,6 +93,7 @@ El resumen final de `main.py` dice cuántas imágenes llegan, cuántas puede ana
 
 - **C930e en la Pi:** probar exposiciones cortas con `v4l2-ctl` (`deployment.md`, sección 5).
 - **FPS:** la C930e graba a 30 fps; `FlashExits` se ajustó a 60 fps. Revisar `max_hits` y `max_gap_s` con un video de esa cámara.
+- **Prueba de la cámara con un video en pantalla (en espera, 5 oct):** apuntar la C930e a una pantalla con el `0040-1` en pantalla completa, la piquera al centro de la imagen, y correr en la Pi con `--video 0 --cam-width 1280 --cam-height 720 --cam-fps 30 --roi-x 640 --roi-y 360 --roi-r 220 ... --dashboard --output video_camara.mp4`; traer el video con `scp`. La Pi no tiene escritorio: el video anotado solo se ve después. Sirve para ver que detecta, no para medir conteos (parpadeo, reflejos y tamaño cambian las detecciones).
 - **Cámara fija:** el sistema supone que la piquera no se mueve en la imagen (por eso falló el `0062-2M`).
 
 ## Cómo probar un video nuevo (sin hacer trampa)
