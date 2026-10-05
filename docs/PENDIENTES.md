@@ -66,9 +66,18 @@ Ojo: la ROI y el core del `00517-18` se eligieron mirando ese video, así que es
   - el *Pseudo* solo da totales;
   - los datos son de colmenas de otros investigadores; la colmena final está en Cusco y la cámara aún no se instala.
 - **Cómo contar lo del `0020-1`:** falló, se encontró la causa (sombra), se agregó una regla general (`--static-s`) que bajó a 16 sin empeorar los otros videos, y falta confirmarla en otra colmena nueva.
-- **Demo:** correr el sistema en la Raspberry Pi con los videos grabados. No usar la cámara filmando un celular: el parpadeo, los reflejos y el tamaño cambian los resultados. Si se quiere mostrar la C930e, unos segundos en vivo solo para ver que captura.
+- **Fecha:** la presentación al jurado es el 6 de octubre de 2026. No cambiar `main.py` antes de esa fecha.
+- **Después de la presentación:** que `--events` guarde la hora real de cada evento, escriba a disco de inmediato y corte un archivo por día. Hoy `t_s` es relativo al arranque y el archivo se sobrescribe al reiniciar. Lo necesita el proyecto de análisis (`C:\Users\Brayan\Projects\analisis_presentacion_results`), que va separado de este repositorio y lee el CSV de eventos y `/api/status`.
+- **Demo (decidido el 5 oct):** antes de desplegar en Cusco hay que presentar el proyecto a un jurado, y ahora no hay abejas reales.
+  - El conteo se muestra corriendo en la Raspberry Pi con los videos grabados de un minuto. Con un archivo de video se procesan todos los frames, así que el resultado no depende de los FPS de la Pi.
+  - No usar la cámara filmando un celular para contar: el parpadeo, los reflejos y el tamaño cambian los resultados.
+  - La C930e se muestra aparte, unos segundos, solo para ver que captura y detecta. No presentar conteos de esa parte.
+  - La Pi no tiene escritorio (`--show` no funciona): se muestra el dashboard, el video de `--output` copiado al PC o los snapshots. Comandos en `deployment.md`, sección 5.4.
+  - Decir qué videos son de desarrollo (los ajustes se eligieron con el `0040-1`).
 
 ### 3. Medir los FPS del modelo 480 en la Raspberry Pi 5
+
+**Primera medición (5 oct):** `0040-1` en la Pi 5 con la configuración recomendada, `--num-threads 4`, `--dashboard` y guardando el video (`--output`): **20.9 FPS**, 03:45 para un minuto de video, 32 entradas / 50 salidas (en el PC: 33 / 47), procesador a ~65 °C. No alcanza los 60 fps del video, pero supera los ~15 fps mínimos. Falta medir con `--no-output` (sin dibujar ni guardar video debería ir más rápido) y con la cámara a 30 fps.
 
 Si no alcanza el tiempo real, probar el de 320 (`models/fomo_borrosas_320_int8.lite`, si se descargó de la v6).
 
