@@ -1,6 +1,7 @@
 import argparse
 import csv
 import os
+import signal
 import sys
 import threading
 import time
@@ -392,7 +393,11 @@ def main():
     t_start_cam = None
     counts = {"in": 0, "out": 0}
 
-    while True:
+    # Ctrl+C termina el bucle y muestra el resumen (útil con la cámara en vivo)
+    parar = {"ya": False}
+    signal.signal(signal.SIGINT, lambda *_: parar.update(ya=True))
+
+    while not parar["ya"]:
         if reader is not None:
             ret, frame, t_cap, last_seq = reader.read(last_seq)
             if not ret:
