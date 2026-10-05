@@ -238,6 +238,9 @@ def main():
                         help="hibrido: fracción del radio que es la boca de la piquera (p. ej. 0.5). Una salida solo cuenta "
                              "si la abeja pasó por ahí y una entrada solo si llega ahí; no cuentan las guardianas que vuelan "
                              "frente a la piquera")
+    parser.add_argument("--static-s", type=float, default=None,
+                        help="hibrido + --flash-exits: descarta una salida si en su punto ya había una detección en los "
+                             "N segundos anteriores (sombra o abeja quieta que FOMO ve a ratos). Recomendado: 2.0")
     parser.add_argument("--flash-exits", action="store_true",
                         help="hibrido: contar también las salidas que FOMO solo ve 1-3 frames (despegues borrosos) "
                              "y no proyectar fuera de la ROI los tracks que se cierran")
@@ -264,6 +267,8 @@ def main():
     track_scale = args.track_scale or args.roi_r
     if args.flash_exits and not (use_v2 and args.counter == "hibrido"):
         parser.error("--flash-exits necesita --tracker v2 --counter hibrido")
+    if args.static_s and not args.flash_exits:
+        parser.error("--static-s necesita --flash-exits")
 
     # Inicializar detector FOMO con LiteRT (v2 usa un umbral bajo y filtra después)
     det_threshold = min(args.threshold, args.assoc_threshold) if use_v2 else args.threshold
@@ -317,7 +322,7 @@ def main():
             counter = BeeCounterHybrid(roi_center=(args.roi_x, args.roi_y), roi_radius=args.roi_r,
                                        cancel_s=args.cancel_s, proj_min_speed=args.proj_min_speed,
                                        flash_exits=args.flash_exits, track_scale=track_scale,
-                                   core=args.core)
+                                       core=args.core, static_s=args.static_s)
         else:
             counter = BeeCounterV2(roi_center=(args.roi_x, args.roi_y), roi_radius=args.roi_r)
     else:

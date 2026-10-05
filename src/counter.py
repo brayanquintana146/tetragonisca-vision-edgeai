@@ -304,10 +304,17 @@ class BeeCounterHybrid:
     el centro de la ROI (la boca de la piquera) desde su salida anterior, y una entrada
     solo si la abeja llega a ese centro. Así no cuentan las guardianas que vuelan frente
     a la piquera y cruzan el borde del círculo sin llegar a la boca.
+
+    Con `static_s` (segundos, p. ej. 2.0; necesita las detecciones, o sea `flash_exits`) se
+    descarta una salida cuyo punto ya tenía una detección (a menos de `static_near` escalas)
+    entre `static_s` y `static_gap` segundos antes. Una abeja que se va no sale de un sitio
+    donde ya había algo: ese punto es una sombra o una abeja quieta que FOMO ve a ratos, y el
+    tracker salta hacia ella cuando pierde a una abeja de la boca.
     """
 
     def __init__(self, roi_center, roi_radius, cancel_s=0.5, proj_min_speed=1.5, in_back_project=False,
-                 flash_exits=False, track_scale=None, core=None, **kw):
+                 flash_exits=False, track_scale=None, core=None, static_s=None, static_gap=0.1,
+                 static_near=0.1, **kw):
         self._in = BeeCounterV2(roi_center, roi_radius, back_project=in_back_project, **kw)
         self._out = BeeCounterCross(roi_center, roi_radius, cancel_s=cancel_s,
                                     proj_min_speed=float("inf") if flash_exits else proj_min_speed, **kw)
@@ -317,6 +324,9 @@ class BeeCounterHybrid:
         self._core_t = {}      # track id -> tiempos en que estuvo dentro del centro
         self._last_out = {}    # track id -> tiempo de su última salida aceptada
         self._in_wait = {}     # track id -> entrada esperando que la abeja llegue al centro
+        self._static_s, self._static_gap = static_s, static_gap
+        self._static_near = static_near * float(roi_radius if track_scale is None else track_scale)
+        self._hist = []        # (t, detecciones) recientes, para static_s
         self.events = []
         self.counted = set()
         self.in_count = 0
@@ -334,6 +344,11 @@ class BeeCounterHybrid:
             if detections is not None:
                 self._flash.observe(detections, active_tracks, t)
             new += self._flash.collect(self._out.events, t, final=final)
+        if self._static_s and detections is not None:
+            new = [e for e in new if e[1] != "out" or not self._static(e)]
+            self._hist.append((t, [(float(d[0]), float(d[1])) for d in detections]))
+            # las salidas fugaces se deciden hasta ~2 s tarde: guardar ventana de sobra
+            self._hist = [h for h in self._hist if t - h[0] <= self._static_s + 3.0]
         for e in sorted(new):
             self.events.append(e)
             self.counted.add(e[2])
@@ -342,6 +357,12 @@ class BeeCounterHybrid:
             else:
                 self.out_count += 1
         return {"in": self.in_count, "out": self.out_count}
+
+    def _static(self, e):
+        te, x, y = e[0], e[3], e[4]
+        return any(te - self._static_s <= th <= te - self._static_gap
+                   and any(np.hypot(x - dx, y - dy) < self._static_near for dx, dy in dets)
+                   for th, dets in self._hist)
 
     def _gate_core(self, new, active_tracks, finished_tracks, final):
         for tr in list(active_tracks) + list(finished_tracks):
