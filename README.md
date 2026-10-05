@@ -481,6 +481,10 @@ Para evaluar el impacto de agregar variabilidad al modelo, se registran las mét
 | [**`-multihive`**](https://studio.edgeimpulse.com/studio/1108884) | **v2** | 004 + 005 + 001 | 91.84% | 0.99 | 0.87 | 0.93 | El modelo aprende la variabilidad y generaliza en 3 colmenas distintas. |
 | [**`-multihive`**](https://studio.edgeimpulse.com/studio/1108884) | **v3** | 004 + 005 + 001 + 003 | 95.94% | 1.00 | 0.88 | 0.93 | Alta generalización a 4 colmenas, recuperando 1.00 de precisión y subiendo accuracy. |
 | [**`-multihive`**](https://studio.edgeimpulse.com/studio/1108884) | **v4** | v3 + 196 frames de despegues del video `0040-1` | 94.42% | 0.98 | 0.88 | 0.93 | Igual con abejas normales. Los despegues salen de la primera mitad del `0040-1`. Luego se quitaron para usar el `0040-1` completo como prueba. |
+| [**`-multihive`**](https://studio.edgeimpulse.com/studio/1108884) | **v5** | v3 + 273 frames de abejas borrosas (44 videos de la 004), sin el `0040-1`. **480×480** | 96.60% | 1.00 | 0.89 | 0.94 | Test más difícil: incluye borrosas de 6 videos no vistos. Mejor F1 hasta ahora. |
+| [**`-multihive`**](https://studio.edgeimpulse.com/studio/1108884) | **v6** | Mismos datos que v5. **320×320** | 89.79% | 0.99 | 0.85 | 0.91 | Mismo test que v5: con 320 se pierden más abejas (recall 0.85 frente a 0.89). |
+
+**480 frente a 320 (mismo test, mismos datos, mismos parámetros):** la resolución 480 detecta más abejas (recall 0.89 frente a 0.85) sin falsos positivos (precisión 1.00). Con 480 las abejas borrosas conservan más detalle al reducir el recorte de 1080 px. A cambio, el modelo hace ~2.25 veces más cálculo, así que hay que medir los FPS en la Raspberry Pi. La v5 y la v6 no se comparan directamente con la v3, porque su test incluye abejas borrosas.
 
 **Etiqueta unificada (3 oct 2026).** Hasta la v3 las cajas tenían dos etiquetas: `Abeja` y `Abeja\r` (un `\r` de Windows en un `classes.txt`). `tools/renombrar_etiqueta_ei.py` renombró 13,373 cajas en 1,391 muestras y ahora hay una sola clase. Renombrar cajas pide una API key con rol **Admin**. Los `classes.txt` nuevos se escriben sin salto de línea.
 

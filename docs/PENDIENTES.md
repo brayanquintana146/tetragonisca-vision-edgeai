@@ -16,34 +16,26 @@ Lo hecho hasta ahora está en el [README](../README.md) (historial del modelo y 
 
 ## Pendientes (en orden)
 
-### 1. Etiquetar las imágenes borrosas en Edge Impulse
+### ~~1. Etiquetar las imágenes borrosas en Edge Impulse~~ — hecho el 4 de octubre
 
 - Poner caja `Abeja` a **todas** las abejas del frame, nítidas y borrosas. Una abeja sin caja le enseña al modelo que eso "no es abeja".
 - La mancha alargada de una abeja en vuelo también lleva caja, centrada en la mancha. Usar la misma etiqueta `Abeja`, no una clase nueva.
 - Corregir las cajas verdes pre-etiquetadas y borrar las que no sean abejas.
 - Si alguien ayuda (*Dashboard → Collaborators*), repartirse por video y revisar al final una muestra de sus imágenes.
 
-### 2. Entrenar el modelo nuevo (resolución 320)
+### ~~2–3. Entrenar a 320 y 480~~ — hecho el 4 de octubre
 
-1. *Object detection* con la misma configuración de siempre (README, sección 7).
-2. Anotar las métricas de *Training* y de *Model testing*. El test ahora incluye abejas borrosas de 6 videos que el modelo no vio.
-3. Guardar la versión: `v5 - sin 0040-1 + 273 borrosas de 44 videos (320)`.
-4. Descargar el TFLite int8 como `models/fomo_borrosas_320_int8.lite`.
+v5 (480×480): F1 0.94, P 1.00, R 0.89. v6 (320×320): F1 0.91, P 0.99, R 0.85. Detalle en el README, sección 9. Modelos: `models/fomo_borrosas_480_int8.lite` y `models/fomo_borrosas_320_int8.lite`.
 
-### 3. (Opcional) Entrenar con resolución 480
-
-1. En *Impulse design → Image data*, cambiar 320×320 por 480×480.
-2. Ir a *Generate features* y entrenar.
-3. Descargar el modelo como `models/fomo_borrosas_480_int8.lite`.
-4. Medir los FPS en la Raspberry Pi antes de adoptarlo: hace ~2.25 veces más cálculo.
-
-### 4. Medir con el minuto completo del `0040-1`
+### 4. Medir con el minuto completo del `0040-1` (siguiente)
 
 ```powershell
 python main.py --video examples/videos/0040-1.mp4 --model models/fomo_tetragonisca_int8.lite --roi-x 900 --roi-y 600 --roi-r 220 --crop-roi --counter hibrido --max-gate 0.6 --max-gate-tentative 1.2 --accel-std 80 --no-output --events ev_base.csv
-python main.py --video examples/videos/0040-1.mp4 --model models/fomo_borrosas_320_int8.lite --roi-x 900 --roi-y 600 --roi-r 220 --crop-roi --counter hibrido --max-gate 0.6 --max-gate-tentative 1.2 --accel-std 80 --no-output --events ev_A.csv
-python bench/compare_events.py data/gt_0040-1.csv ev_base.csv ev_A.csv --tol 0.5 --max-angle 40 -q
+python main.py --video examples/videos/0040-1.mp4 --model models/fomo_borrosas_320_int8.lite --roi-x 900 --roi-y 600 --roi-r 220 --crop-roi --counter hibrido --max-gate 0.6 --max-gate-tentative 1.2 --accel-std 80 --no-output --events ev_320.csv
+python main.py --video examples/videos/0040-1.mp4 --model models/fomo_borrosas_480_int8.lite --roi-x 900 --roi-y 600 --roi-r 220 --crop-roi --counter hibrido --max-gate 0.6 --max-gate-tentative 1.2 --accel-std 80 --no-output --events ev_480.csv
+python bench/compare_events.py data/gt_0040-1.csv ev_base.csv ev_320.csv ev_480.csv --tol 0.5 --max-angle 40 -q
 python bench/detection_at_events.py --model models/fomo_borrosas_320_int8.lite
+python bench/detection_at_events.py --model models/fomo_borrosas_480_int8.lite
 ```
 
 - Comparar siempre el F1 con la columna **F1 azar**.
