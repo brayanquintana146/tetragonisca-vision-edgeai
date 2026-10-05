@@ -77,7 +77,9 @@ Ojo: la ROI y el core del `00517-18` se eligieron mirando ese video, así que es
 
 ### 3. Medir los FPS del modelo 480 en la Raspberry Pi 5
 
-**Primera medición (5 oct):** `0040-1` en la Pi 5 con la configuración recomendada, `--num-threads 4`, `--dashboard` y guardando el video (`--output`): **20.9 FPS**, 03:45 para un minuto de video, 32 entradas / 50 salidas (en el PC: 33 / 47), procesador a ~65 °C. No alcanza los 60 fps del video, pero supera los ~15 fps mínimos. Falta medir con `--no-output` (sin dibujar ni guardar video debería ir más rápido) y con la cámara a 30 fps.
+**Primera medición (5 oct):** `0040-1` en la Pi 5 con la configuración recomendada, `--num-threads 4`, `--dashboard` y guardando el video (`--output`): **20.9 FPS**, 03:45 para un minuto de video, 32 entradas / 50 salidas (en el PC: 33 / 47), procesador a ~65 °C. No alcanza los 60 fps del video, pero supera los ~15 fps mínimos. Ese 20.9 era el cálculo viejo (solo detección y tracking).
+
+**Con `--no-output` (5 oct), velocidad real** (frames entre tiempo total, incluye leer el video): **44.8 FPS**, 01:20 para un minuto de video, 32 entradas / 50 salidas. Supera los 30 fps de la C930e. Falta confirmarlo con la cámara conectada (`--video 0 --cam-fps 30`, parar con Ctrl+C).
 
 Si no alcanza el tiempo real, probar el de 320 (`models/fomo_borrosas_320_int8.lite`, si se descargó de la v6).
 
