@@ -610,19 +610,25 @@ def main():
 
     avg_fps = (processed_frames / total_processing_time) if total_processing_time > 0 else 0.0
 
-    print("\n" + "=" * 60)
-    print(" " * 17 + "RESUMEN DE PROCESAMIENTO")
-    print("=" * 60)
-    print(f" Tiempo Total de Ejecución : {total_time_str}")
-    print(f" Velocidad Promedio (IA)   : {avg_fps:.1f} FPS")
-    print("-" * 60)
-    print(f" Total Cuadros (Video)     : {frame_idx}")
-    print(f" Cuadros Procesados (IA)   : {processed_frames}")
-    print("-" * 60)
-    print(f" Identidades Únicas        : {total_ids}")
-    print(f" Entradas (IN)             : {counts['in']}")
-    print(f" Salidas (OUT)             : {counts['out']}")
-    print("=" * 60)
+    video_s = frame_idx / fps if fps else 0.0
+    vm, vs = divmod(int(round(video_s)), 60)
+    fuente = os.path.basename(args.video) if args.video else "cámara"
+    tiempo_real = "sí" if avg_fps >= fps else "no"
+
+    print("\n" + "=" * 50)
+    print(" RESUMEN")
+    print("=" * 50)
+    print(f" Video          : {fuente} ({vm:02d}:{vs:02d})")
+    print(f" Entradas (IN)  : {counts['in']}")
+    print(f" Salidas (OUT)  : {counts['out']}")
+    print("-" * 50)
+    print(f" Velocidad      : {avg_fps:.1f} FPS (video a {fps:.0f} FPS, tiempo real: {tiempo_real})")
+    print(f" Tiempo total   : {total_time_str}")
+    if out is not None:
+        print(f" Video anotado  : {args.output}")
+    if events_file is not None:
+        print(f" Eventos (CSV)  : {args.events}")
+    print("=" * 50)
 
 
 if __name__ == "__main__":

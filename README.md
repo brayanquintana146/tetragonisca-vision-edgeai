@@ -498,7 +498,7 @@ Para consultar los detalles de implementación del Algoritmo Húngaro, el filtro
 
 ### Uso del Pipeline de Inferencia
 
-El script `main.py` levanta el modelo FOMO, establece la circunferencia virtual de la piquera, asocia las abejas con identificadores únicos y despliega un panel de información en vivo (HUD) con el conteo de eventos de **Entrada (IN)** y **Salida (OUT)**. El número de IDs creados por el tracker solo se imprime en la consola ("Identidades Únicas"): no es un conteo de abejas, porque una misma abeja puede recibir varios IDs.
+El script `main.py` levanta el modelo FOMO, establece la circunferencia virtual de la piquera, asocia las abejas con identificadores únicos y despliega un panel de información en vivo (HUD) con el conteo de eventos de **Entrada (IN)** y **Salida (OUT)**. Al terminar, la consola muestra un resumen con las entradas, las salidas, la velocidad (FPS y si alcanza el tiempo real) y los archivos generados.
 
 ```powershell
 python main.py --video "examples/videos/0040-1.mp4" --roi-x 900 --roi-y 600 --roi-r 220 --show
