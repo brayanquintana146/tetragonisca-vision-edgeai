@@ -45,8 +45,8 @@ Los valores por defecto de `main.py` no cambian (`--counter v2`, `--max-gate 1.2
 **Problema:** al revisar una por una las 78 salidas del `0040-1` con el modelo 480, la abeja que despega aparece como una mancha borrosa fuera de la piquera en solo 1–2 frames, a unos 250 px entre uno y otro. El tracker pide dos detecciones seguidas con confianza ≥ `--threshold` para crear un ID, así que esa salida no se contaba. Además, 43 de las 80 salidas contadas eran falsas, sobre todo por proyectar fuera de la ROI tracks que se pierden cerca del borde.
 
 **Regla:**
-1. Una detección entre 1.0 y 2.5 radios del centro que no está a menos de 0.4 radios de una abeja rastreada en ese frame es candidata.
-2. Las candidatas se enlazan en trazos (hasta 0.04 s entre una y otra, hasta 84 radios/s).
+1. Una detección fuera de la ROI (hasta 1.5 escalas del tracker más allá del borde) que no está a menos de 0.4 escalas de una abeja rastreada en ese frame es candidata. La escala es `--track-scale`, o el radio de la ROI si no se da.
+2. Las candidatas se enlazan en trazos (hasta 0.04 s entre una y otra, hasta 84 escalas/s).
 3. Un trazo de 3 detecciones o menos que no se acerca a la piquera es una salida, con el tiempo y la posición de su primera detección.
 4. No cuenta si hubo una abeja rastreada fuera de la ROI cerca de ahí (0.6 escalas) en los últimos 0.5 s: es una abeja que ya andaba volando, como una guardiana que revolotea.
 5. Se descarta si el contador de cruces ya contó una salida a menos de 0.4 s y 40°. Por eso cada salida se decide 1.5 s después.
@@ -60,7 +60,35 @@ Los valores por defecto de `main.py` no cambian (`--counter v2`, `--max-gate 1.2
 | Con `--flash-exits` | 48 / 61 | 78 | 0.69 | 0.39 |
 | Con `--flash-exits --core 0.5 --cancel-s 1.0` | 46 / 49 | 78 | 0.72 | 0.40 |
 
-Las entradas no cambian (F1 0.87). Con las detecciones del modelo v4 sube de 0.52 a 0.58. La regla se diseñó con este mismo minuto y a 60 fps: falta confirmarla con otro video anotado y revisar `max_hits` y `max_gap_s` a los 30 fps de la C930e.
+Con `--flash-exits` solo, las entradas no cambian (F1 0.87); con `--core 0.5` bajan a 0.84 (29 bien de 33 contadas). Con las detecciones del modelo v4, `--flash-exits` sube las salidas de 0.52 a 0.58. La regla se diseñó con este mismo minuto y a 60 fps: falta confirmarla con otro video anotado y revisar `max_hits` y `max_gap_s` a los 30 fps de la C930e.
+
+### Boca de la piquera (`--core`)
+
+**Problema:** en el `0031-2` (colmena 003) hay guardianas que vuelan frente al tubo y cruzan el borde del círculo una y otra vez. Cada cruce hacia fuera contaba como salida.
+
+**Regla:** con `--core 0.5`, una salida solo cuenta si la abeja pasó por el centro de la ROI (la mitad del radio, la boca de la piquera) desde su salida anterior. Una entrada solo cuenta si la abeja llega a ese centro; mientras no llega, la entrada queda en espera, y se descarta si el track se cierra antes. La guardiana que revolotea cruza el borde pero no llega a la boca. Va junto con `--cancel-s 1.0`: si una abeja sale y vuelve a entrar en menos de 1 s, no cuenta ninguno de los dos cruces.
+
+En el `0040-1`, `--core 0.5 --cancel-s 1.0` baja las salidas falsas de 13 a 3. Con `--core 0.3` casi no se cuentan entradas (3 de 36), porque en ese video las abejas no se ven justo en el centro.
+
+### Escala del tracker (`--track-scale`)
+
+El tracker mide todas sus distancias en múltiplos de una escala: cuánto puede moverse una abeja entre frames (`--max-gate`), qué tan cerca deben estar dos celdas de FOMO para ser una sola abeja (0.25 escalas) y dónde busca `--flash-exits`. Por defecto la escala es el radio de la ROI.
+
+En el `0031-2` el círculo tiene que ser chico (radio 100) para que las guardianas queden fuera. Con escala 100, una abeja se partía en dos detecciones (las celdas se fusionaban solo a menos de 25 px) y el conteo se disparaba. `--track-scale 220` separa las dos cosas: el círculo decide dónde se cuenta y la escala decide cómo se sigue a la abeja. La escala depende del tamaño de la abeja en el video; 220 sirve cuando las abejas se ven como en el `0040-1`.
+
+### Resultados en el `0031-2`
+
+Solo hay totales de referencia (*Pseudo* del paper de Leocádio et al.: 21 salidas, 32 entradas), así que no se mide F1. Con `--roi-x 855 --roi-y 465 --roi-r 100 --track-scale 220`:
+
+| Configuración | Salidas | Entradas |
+| :--- | :---: | :---: |
+| *Pseudo* (paper) | 21 | 32 |
+| ByteTrack / EuTrack (paper) | 73 / 100 | 76 / 121 |
+| `--flash-exits` | 54 | 51 |
+| `--flash-exits --core 0.5` | 47 | 40 |
+| `--flash-exits --core 0.5 --cancel-s 1.0` + filtro de abejas que ya volaban (regla 4 de arriba) | 31 | 40 |
+
+Los ajustes se eligieron mirando los dos videos a la vez, y se descartó cualquiera que empeorara el `0040-1`. Aun así, hace falta un tercer video para confirmarlos.
 
 ### Cómo se evalúa el conteo
 
@@ -76,7 +104,7 @@ Se compara evento por evento contra `data/gt_0040-1.csv` con `bench/compare_even
 | `v2` por defecto | 0.64 (0.26) | 6 de 38 | 0.22 (0.15) |
 | `hibrido` + ajustes de arriba | 0.58 (0.23) | 18 de 38 | 0.46 (0.26) |
 
-**Límite actual:** se barrieron más de 150 combinaciones (`--max-gate`, `--max-gate-tentative`, `--accel-std`, `--cancel-s`, `--proj-min-speed`, umbral de nacimiento), sobre las detecciones del PC y de Linux y con ruido simulado. El F1 de salidas no supera ~0.5–0.6. Solo `--accel-std 260 --max-gate-tentative 1.0` sube las entradas, de 0.58 a ~0.8 en 30–60 s, pero cuenta 58 salidas donde hay 38. El cuello de botella ya no es el tracker: FOMO deja de ver a la abeja borrosa al despegar. La siguiente mejora es reentrenar con abejas en vuelo (`scripts/05_extraer_borrosas.py`).
+**Límite actual:** se barrieron más de 150 combinaciones (`--max-gate`, `--max-gate-tentative`, `--accel-std`, `--cancel-s`, `--proj-min-speed`, umbral de nacimiento), sobre las detecciones del PC y de Linux y con ruido simulado. El F1 de salidas no supera ~0.5–0.6. Solo `--accel-std 260 --max-gate-tentative 1.0` sube las entradas, de 0.58 a ~0.8 en 30–60 s, pero cuenta 58 salidas donde hay 38. Ese análisis (4 oct) buscaba en los parámetros del tracker. El 5 oct se vio que muchas salidas sí se detectan, pero solo en 1–2 frames; `--flash-exits` (arriba) las recupera.
 
 **Herramientas:**
 - `bench/dump_detections.py`: guarda las detecciones crudas por frame en un `.json.gz`.
@@ -138,7 +166,3 @@ El sistema incorpora un **Conteo Inferido por Desaparición**:
 - Cuando una abeja cruza el umbral de `max_disappeared` y el tracker la elimina oficialmente, se revisa su último instante *activo*.
 - Si la trayectoria duró lo suficiente para descartar ruido temporal (`history_len >= 5`) y nunca fue contabilizada de forma directa por cruce visible, se examina su vector de velocidad final.
 - Si el vector de velocidad apunta matemáticamente **hacia afuera** de la circunferencia del ROI en el momento de desaparecer, el sistema infiere un cruce exitoso e incrementa las Salidas (OUT). Lo mismo se aplica a las entradas en ángulo ciego (IN).
-
-### Segundo video: `0031-2` (colmena 003, sin anotación propia)
-
-Solo hay totales de referencia ("Pseudo" del paper de Leocádio et al.: 21 salidas, 32 entradas), así que no se mide F1. Con la piquera en la punta del tubo (`--roi-x 855 --roi-y 465 --roi-r 100 --track-scale 220`) hay guardianas que revolotean frente al tubo y cruzan el círculo. Con `--flash-exits --core 0.5 --cancel-s 1.0` el sistema cuenta 31 salidas y 40 entradas. En el paper, ByteTrack contó 73/76 y EuTrack 100/121 en ese mismo video.

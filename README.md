@@ -498,11 +498,19 @@ Para consultar los detalles de implementación del Algoritmo Húngaro, el filtro
 
 ### Uso del Pipeline de Inferencia
 
-El script `main.py` levanta el modelo FOMO, establece la circunferencia virtual de la piquera, asocia las abejas con identificadores únicos y despliega un panel de información en vivo (HUD) con el conteo de eventos de **Entrada (IN)**, **Salida (OUT)** y el total histórico de abejas.
+El script `main.py` levanta el modelo FOMO, establece la circunferencia virtual de la piquera, asocia las abejas con identificadores únicos y despliega un panel de información en vivo (HUD) con el conteo de eventos de **Entrada (IN)** y **Salida (OUT)**. El número de IDs creados por el tracker solo se imprime en la consola ("Identidades Únicas"): no es un conteo de abejas, porque una misma abeja puede recibir varios IDs.
 
 ```powershell
 python main.py --video "examples/videos/0040-1.mp4" --roi-x 900 --roi-y 600 --roi-r 220 --show
 ```
+
+**Configuración recomendada (5 oct 2026).** Modelo v5 (480×480) con el contador híbrido y las reglas de salidas fugaces y boca de la piquera:
+
+```powershell
+python main.py --video examples/videos/0040-1.mp4 --model models/fomo_borrosas_480_int8.lite --roi-x 900 --roi-y 600 --roi-r 220 --crop-roi --counter hibrido --max-gate 0.9 --max-gate-tentative 1.2 --accel-std 260 --threshold 0.7 --max-lost 0.3 --proj-min-speed 3.0 --flash-exits --core 0.5 --cancel-s 1.0 --output video_conteo.mp4 --events eventos.csv
+```
+
+Para otra colmena hay que ubicar la piquera primero: correr con `--no-output --snapshot-every 30` y revisar en `snapshots/` que el círculo caiga sobre la boca de la piquera. Si el círculo tiene que ser más chico que el del `0040-1`, agregar `--track-scale 220` para que el tracker no parta una abeja en dos (ver [Argumentos](#argumentos-de-configuración)).
 
 ### Argumentos de Configuración:
 - `--video`: Ruta al archivo de video o cámara en vivo (`0`, `/dev/video0`).
@@ -569,5 +577,28 @@ python bench/compare_events.py data/gt_0040-1.csv eventos.csv --start 30 --tol 0
 - **Entradas:** claramente por encima del azar.
 - **Salidas:** el contador híbrido casi triplica las acertadas, pero se pierde la mitad. Más de 150 combinaciones de parámetros del tracker no mejoran esto. La causa está en el detector: al despegar, la abeja sale borrosa y FOMO deja de verla. Con `--crop-roi`, el modelo ve en 3 o más de 13 frames solo al 58% de las abejas que salen.
 - **PC y Linux** dan las mismas celdas con probabilidades distintas en ±0.05. Basta eso para mover el F1 de salidas entre 0.06 y 0.08, así que diferencias menores a eso entre configuraciones no son significativas con un solo minuto anotado.
+
+**Resultados (5 oct 2026).** Minuto completo del `0040-1`, modelo v5 (480×480), detecciones del PC de Brayan, medición estricta. Los ajustes se eligieron con este mismo minuto:
+
+| Configuración | Entradas bien / contadas (de 36) | F1 IN (azar) | Salidas bien / contadas (de 78) | F1 OUT (azar) |
+| :--- | :---: | :---: | :---: | :---: |
+| Modelo base (`fomo_tetragonisca`), ajustes del 4 oct | | 0.75 | | 0.44 |
+| v5, tracker ajustado para 480 | 33 / 40 | 0.87 (0.31) | 37 / 80 | 0.47 (0.27) |
+| + `--flash-exits` | 33 / 40 | 0.87 (0.31) | 48 / 61 | 0.69 (0.39) |
+| + `--core 0.5 --cancel-s 1.0` | 29 / 33 | 0.84 (0.29) | 46 / 49 | **0.72 (0.40)** |
+
+- **Por qué se perdían las salidas:** revisando las 78 una por una, la abeja que despega aparece en 1–2 frames como una mancha borrosa, a ~250 px entre un frame y otro. El tracker no crea un ID con eso. `--flash-exits` cuenta esas manchas (detalle en [TRACKING_ALGORITHM.md](docs/TRACKING_ALGORITHM.md)).
+- **Lo que ninguna regla recupera:** 17 salidas que el modelo no detecta en ningún frame. Eso depende del detector o de la cámara (exposición corta).
+
+**Segundo video: `0031-2` (colmena 003).** No tiene anotación propia, solo los totales *Pseudo* del paper, así que se comparan totales y no aciertos. Piquera en la punta del tubo: `--roi-x 855 --roi-y 465 --roi-r 100 --track-scale 220`.
+
+| `0031-2` | Salidas | Entradas |
+| :--- | :---: | :---: |
+| *Pseudo* (paper) | 21 | 32 |
+| ByteTrack (paper) | 73 | 76 |
+| EuTrack (paper) | 100 | 121 |
+| Este proyecto, configuración recomendada | 31 | 40 |
+
+En el `0040-1`, el paper reporta ByteTrack 29 salidas / 45 entradas y EuTrack 21 / 47; este proyecto cuenta 49 / 33 (46 y 29 correctas). Comparar totales sirve como referencia, pero no prueba aciertos: un total puede coincidir por casualidad. Ajustar más para llegar justo a 21/32 sería sobreajustar a ese video; los valores se confirman con un tercer video.
 
 Los siguientes pasos están en [`docs/PENDIENTES.md`](docs/PENDIENTES.md).

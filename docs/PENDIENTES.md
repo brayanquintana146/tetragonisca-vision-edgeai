@@ -1,67 +1,64 @@
 # Pendientes — tetragonisca-vision-edgeai
 
-Última actualización: 4 de octubre de 2026. Rama: `feature/algoritmo-conteo`.
+Última actualización: 5 de octubre de 2026. Rama: `feature/algoritmo-conteo`.
 
-Lo hecho hasta ahora está en el [README](../README.md) (historial del modelo y validación del conteo) y en [TRACKING_ALGORITHM.md](TRACKING_ALGORITHM.md) (contador híbrido y cómo se evalúa).
+Lo hecho hasta ahora está en el [README](../README.md) (historial del modelo, configuración recomendada y validación del conteo) y en [TRACKING_ALGORITHM.md](TRACKING_ALGORITHM.md) (contador híbrido, salidas fugaces, boca de la piquera y escala del tracker).
 
-## Estado de partida
+## Estado actual
 
-- **Video de prueba:** `0040-1`, con 36 entradas y 78 salidas anotadas en `data/gt_0040-1.csv`. No se usa para entrenar.
-- **Modelo base para comparar:** `models/fomo_tetragonisca_int8.lite`, que nunca vio el `0040-1`.
-- **Edge Impulse (proyecto 1108884):**
-  - La versión **v4** guarda el estado con los 196 despegues del `0040-1`.
-  - Esos 196 se borran del proyecto; deben quedar 1,595 muestras más las borrosas.
-  - Se subieron **273 frames con abejas borrosas** de 44 videos de la colmena 004, sin el `0040-1` ni el `00427-28`.
-  - Los frames de los videos 1.º, 8.º, 15.º, 22.º, 29.º y 36.º de la carpeta van a *test*.
+- **Modelo:** v5, 480×480, con 273 abejas borrosas (`models/fomo_borrosas_480_int8.lite`). *Model testing*: F1 0.94.
+- **Configuración recomendada:**
+  ```powershell
+  --crop-roi --counter hibrido --max-gate 0.9 --max-gate-tentative 1.2 --accel-std 260 --threshold 0.7 --max-lost 0.3 --proj-min-speed 3.0 --flash-exits --core 0.5 --cancel-s 1.0
+  ```
+- **`0040-1`** (anotado a mano: 36 entradas, 78 salidas; medición estricta):
+  - entradas: 29 bien de 33 contadas, F1 0.84 (azar 0.29);
+  - salidas: 46 bien de 49 contadas, F1 0.72 (azar 0.40).
+- **`0031-2`** (colmena 003, solo totales *Pseudo* del paper: 32 entradas, 21 salidas): cuenta 40 entradas y 31 salidas, con `--roi-x 855 --roi-y 465 --roi-r 100 --track-scale 220`.
+- **Ajustes:** se eligieron con estos dos videos, así que todavía no están confirmados.
 
 ## Pendientes (en orden)
 
-### ~~1. Etiquetar las imágenes borrosas en Edge Impulse~~ — hecho el 4 de octubre
+### 1. Preparar la presentación
 
-- Poner caja `Abeja` a **todas** las abejas del frame, nítidas y borrosas. Una abeja sin caja le enseña al modelo que eso "no es abeja".
-- La mancha alargada de una abeja en vuelo también lleva caja, centrada en la mancha. Usar la misma etiqueta `Abeja`, no una clase nueva.
-- Corregir las cajas verdes pre-etiquetadas y borrar las que no sean abejas.
-- Si alguien ayuda (*Dashboard → Collaborators*), repartirse por video y revisar al final una muestra de sus imágenes.
+- **Qué funciona:**
+  - entradas: F1 0.84, muy sobre el azar;
+  - salidas: F1 0.72, antes 0.47. La causa de las pérdidas está medida: la abeja que despega se ve solo 1–2 frames.
+- **Comparación con el paper:** en el `0031-2`, sus trackers contaron 73–100 salidas, donde la referencia es 21; este proyecto cuenta 31. En el `0040-1`, sus trackers contaron 21–29 salidas, donde la referencia es 85; este proyecto cuenta 49, con 46 correctas de 78 reales.
+- **Método:**
+  - medición estricta contra el azar;
+  - test separado por video;
+  - video de prueba anotado a mano;
+  - segundo video de otra colmena.
+- **Límites que hay que decir:**
+  - los ajustes se eligieron con los mismos dos videos;
+  - el `0040-1` es de una colmena que el modelo ya conoce;
+  - el *Pseudo* solo da totales.
+- **Resumen con los números:** `/mnt/project-files/tetragonisca/resultados_presentacion.md`.
 
-### ~~2–3. Entrenar a 320 y 480~~ — hecho el 4 de octubre
+### 2. Confirmar los ajustes con un tercer video
 
-v5 (480×480): F1 0.94, P 1.00, R 0.89. v6 (320×320): F1 0.91, P 0.99, R 0.85. Detalle en el README, sección 9. Modelos: `models/fomo_borrosas_480_int8.lite` y `models/fomo_borrosas_320_int8.lite`.
+- **Qué video:** uno que no se haya usado para ajustar. Si tiene *Pseudo* en el paper, mejor: `0010-1`, `0020-1`, `00517-18` o `0062-2M`.
+- **Ubicar la piquera:** con `--no-output --snapshot-every 30`, y usar `--track-scale 220` si el círculo es chico.
+- **Comparar:** los totales contra el `.txt` del video, sin cambiar ningún ajuste.
+- **Para medir aciertos (F1)** hay que anotarlo con `tools/anotar_eventos.py`.
 
-### 4. Medir con el minuto completo del `0040-1` (siguiente)
+### 3. Extraer los despegues reales para reentrenar (opcional)
 
-```powershell
-python main.py --video examples/videos/0040-1.mp4 --model models/fomo_tetragonisca_int8.lite --roi-x 900 --roi-y 600 --roi-r 220 --crop-roi --counter hibrido --max-gate 0.6 --max-gate-tentative 1.2 --accel-std 80 --no-output --events ev_base.csv
-python main.py --video examples/videos/0040-1.mp4 --model models/fomo_borrosas_320_int8.lite --roi-x 900 --roi-y 600 --roi-r 220 --crop-roi --counter hibrido --max-gate 0.6 --max-gate-tentative 1.2 --accel-std 80 --no-output --events ev_320.csv
-python main.py --video examples/videos/0040-1.mp4 --model models/fomo_borrosas_480_int8.lite --roi-x 900 --roi-y 600 --roi-r 220 --crop-roi --counter hibrido --max-gate 0.6 --max-gate-tentative 1.2 --accel-std 80 --no-output --events ev_480.csv
-python bench/compare_events.py data/gt_0040-1.csv ev_base.csv ev_320.csv ev_480.csv --tol 0.5 --max-angle 40 -q
-python bench/detection_at_events.py --model models/fomo_borrosas_320_int8.lite
-python bench/detection_at_events.py --model models/fomo_borrosas_480_int8.lite
-```
+Las 273 borrosas eran sobre todo abejas volando, no el momento del despegue: las salidas que el detector ve solo subieron de 54% a 58%. `--flash-exits` encuentra justo esos despegues, así que se puede usar para sacar esos frames de los 44 videos de la 004 y etiquetarlos. Nunca del `0040-1`.
 
-- Comparar siempre el F1 con la columna **F1 azar**.
-- Meta: que suban las salidas acertadas y el % de salidas vistas por el detector, que hoy es 58% con `--crop-roi`.
-- Si mejora, decidir si `--crop-roi --counter hibrido` y los ajustes pasan a ser los valores por defecto de `main.py`, y probar el modelo en la Raspberry Pi.
+### 4. Cámara (en espera)
 
-### 5. Preparar la presentación
-
-- **Qué funciona:** las entradas (F1 claramente sobre el azar) y el detector con abejas nítidas (F1 0.93 en *Model testing*).
-- **Qué funciona a medias:** las salidas, con la causa medida (abejas borrosas al despegar) y el efecto del reentrenamiento (paso 4).
-- **Método:** la medición estricta con comparación contra el azar, el test separado por video y el video de prueba anotado a mano.
-- **Trabajo futuro:**
-  - cámara C930e con exposición fija (`deployment.md`, sección 5);
-  - prueba de generalización: entrenar sin la colmena 004 y medir con el `0040-1`;
-  - etiquetar pocas imágenes en la colmena final de Cusco.
+- **C930e en la Pi:** probar exposiciones cortas con `v4l2-ctl` (`deployment.md`, sección 5), por ejemplo `exposure_time_absolute=30`, que son 3 ms.
+- **FPS:** la C930e graba a 30 fps y el `0040-1` es de 60. Habrá que revisar `max_hits` y `max_gap_s` de `FlashExits` con un video de esa cámara.
 
 ## Otros pendientes
 
-- **Rotar las API keys de Edge Impulse:** se compartieron dos (ingestión y Admin) en un chat. Revocarlas en *Dashboard → Keys* y no dejar keys Admin activas.
-- **Anotar un segundo video de prueba** con `tools/anotar_eventos.py`. Un solo minuto no basta para confirmar ajustes finos.
-- **Prueba real con la webcam C930e en la Pi:**
-  - fijar la exposición con `v4l2-ctl`;
-  - calibrar la ROI con `--snapshot-every`;
-  - grabar un clip y anotarlo.
+- **Rotar las API keys de Edge Impulse:** se compartieron dos (ingestión y Admin) en un chat. Revocarlas en *Dashboard → Keys*.
+- **Cambiar las contraseñas de la Pi y del hotspot:** se quitaron de `deployment.md`, pero siguen en el historial de git.
+- **Medir los FPS del modelo 480 en la Raspberry Pi 5.**
 - **Orden del repositorio:**
-  - quitar la contraseña de `pi` y del Wi-Fi de `deployment.md` y cambiarla en la Pi;
   - licencia inconsistente (MIT en el badge, BSD 3-Clause en el repo);
   - revisar `output_result.mp4` y `CARPETA_COFRE_MOVER_CARPETA_PRINCIPAL`;
-  - `bench/make_scenarios.py` necesita TensorFlow como respaldo en Windows.
+  - `bench/make_scenarios.py` necesita TensorFlow como respaldo en Windows;
+  - `test_tracker.py` (EuTrack v1) falla desde antes de estos cambios.
