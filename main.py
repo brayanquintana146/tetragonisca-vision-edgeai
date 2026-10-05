@@ -626,7 +626,19 @@ def main():
     video_s = t_loop if is_camera else (frame_idx / fps if fps else 0.0)
     vm, vs = divmod(int(round(video_s)), 60)
     fuente = f"cámara {args.video}" if is_camera else os.path.basename(args.video)
-    tiempo_real = "sí" if avg_fps >= fps else "no"
+    # Lo que el equipo puede analizar: promedio por imagen de detección + tracking,
+    # sin contar la espera de la cámara ni la lectura del video
+    puede = (processed_frames / total_processing_time) if total_processing_time > 0 else 0.0
+    al_ritmo = avg_fps >= 0.95 * fps
+    ritmo = "en vivo" if is_camera else "al ritmo del video"
+    if al_ritmo:
+        nota = None
+    elif puede < fps:
+        nota = "el equipo analiza más lento de lo que llega"
+    elif is_camera:
+        nota = "la cámara mandó menos imágenes (¿poca luz?)"
+    else:
+        nota = "abrir cada imagen del video es lento; con cámara no pasa"
 
     print("\n" + "=" * 50)
     print(" RESUMEN")
@@ -635,10 +647,12 @@ def main():
     print(f" Entradas (IN)  : {counts['in']}")
     print(f" Salidas (OUT)  : {counts['out']}")
     print("-" * 50)
-    print(f" Procesamiento  : {avg_fps:.1f} FPS (video a {fps:.0f} FPS, tiempo real: {tiempo_real})")
+    print(f" Llegan         : {fps:.0f} img/s ({'cámara' if is_camera else 'video'})")
+    print(f" Puede analizar : {puede:.0f} img/s (promedio)")
+    print(f" Analizó        : {avg_fps:.1f} img/s -> {ritmo}: {'sí' if al_ritmo else 'no'}")
+    if nota:
+        print(f" Nota           : {nota}")
     print(f" Tiempo total   : {total_time_str}" + ("" if is_camera else f" (para {vm:02d}:{vs:02d} de video)"))
-    if is_camera and cam_frames:
-        print(f" Cámara         : mandó {cam_frames} imágenes, se procesaron {frame_idx} ({100 * frame_idx / cam_frames:.0f}%)")
     if out is not None:
         print(f" Video anotado  : {args.output}")
     if events_file is not None:

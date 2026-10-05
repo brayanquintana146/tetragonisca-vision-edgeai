@@ -500,7 +500,17 @@ Para consultar los detalles de implementación del Algoritmo Húngaro, el filtro
 
 ### Uso del Pipeline de Inferencia
 
-El script `main.py` levanta el modelo FOMO, establece la circunferencia virtual de la piquera, asocia las abejas con identificadores únicos y despliega un panel de información en vivo (HUD) con el conteo de eventos de **Entrada (IN)** y **Salida (OUT)**. Al terminar, la consola muestra un resumen con las entradas, las salidas, la velocidad (FPS y si alcanza el tiempo real) y los archivos generados.
+El script `main.py` levanta el modelo FOMO, establece la circunferencia virtual de la piquera, asocia las abejas con identificadores únicos y despliega un panel de información en vivo (HUD) con el conteo de eventos de **Entrada (IN)** y **Salida (OUT)**. Al terminar, la consola muestra un resumen con las entradas, las salidas, la velocidad y los archivos generados. La velocidad se lee en tres líneas:
+
+| Línea | Qué significa |
+| :--- | :--- |
+| **Llegan** | Imágenes por segundo que manda la cámara o que trae el video. Es el ritmo que hay que alcanzar. |
+| **Puede analizar** | Promedio de imágenes por segundo que el equipo alcanza a analizar (detección + tracking), sin contar la espera de la cámara ni la lectura del video. Es el promedio de la columna `FPS` del avance en consola. |
+| **Analizó** | Imágenes por segundo que de verdad procesó, contando todo. Con cámara dice `en vivo: sí/no`; con video grabado, `al ritmo del video: sí/no`. |
+
+Si no alcanzó el ritmo, aparece una **Nota** con la causa: el equipo analiza más lento de lo que llega; o, con video grabado, abrir cada imagen del video es lento (con cámara no pasa); o, con cámara, la cámara mandó menos imágenes (por ejemplo con poca luz).
+
+Ejemplo en la Raspberry Pi 5 con la C930e (1280×720, modelo 480, `--no-output`): llegan 30 img/s, puede analizar ~95, analizó 30.0 → en vivo: sí. Con un video grabado a 60 fps (`0040-1`) analizó 44.8 img/s: no alcanza los 60 del video porque abrir cada imagen cuesta tiempo, pero eso no limita a la cámara.
 
 ```powershell
 python main.py --video "examples/videos/0040-1.mp4" --roi-x 900 --roi-y 600 --roi-r 220 --show

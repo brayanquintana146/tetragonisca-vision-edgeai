@@ -83,7 +83,7 @@ Ojo: la ROI y el core del `00517-18` se eligieron mirando ese video, así que es
 
 Si no alcanza el tiempo real, probar el de 320 (`models/fomo_borrosas_320_int8.lite`, si se descargó de la v6).
 
-El resumen final de `main.py` ya dice los FPS y si alcanza el tiempo real.
+El resumen final de `main.py` dice cuántas imágenes llegan, cuántas puede analizar el equipo y cuántas analizó, con una nota si no alcanzó el ritmo (explicado en el README, sección del script principal).
 
 ### 4. Extraer los despegues reales para reentrenar (opcional)
 
