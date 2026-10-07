@@ -258,8 +258,7 @@ def main():
                              "justo antes de entrar (un punto del fondo que salta a una abeja). Recomendado: 0.15")
     parser.add_argument("--park-s", type=float, default=None,
                         help="hibrido + --flash-exits: un track quieto N segundos o más fuera de la ROI (mancha del "
-                             "fondo) deja de tapar los despegues que pasan cerca. Valor probado: 0.9. No se confirmó "
-                             "en el examen a ciegas de la colmena 005")
+                             "fondo) deja de tapar los despegues que pasan cerca. Valor probado: 0.9")
     parser.add_argument("--flash-exits", action="store_true",
                         help="hibrido: contar también las salidas que FOMO solo ve 1-3 frames (despegues borrosos) "
                              "y no proyectar fuera de la ROI los tracks que se cierran")
