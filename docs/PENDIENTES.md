@@ -144,7 +144,7 @@ El análisis por partes del examen sugiere que no ayuda (agregó 4 salidas falsa
 
 - Pasar a `bench/` los scripts de la prueba (detección foto por foto, detecciones de varios modelos, conteo por grupos, manchas inyectadas). Hoy están en `prueba_v7_colmena005.zip` y `segunda_ronda_v7.zip`, en la biblioteca del proyecto, y usan los nombres viejos de los modelos.
 - Quitar del README las comparaciones contra el *Pseudo* como medida principal y dejarlas como dato secundario.
-- Edge Impulse: confirmar que las muestras de la 005 quedaron como se quiere (activadas para la línea v5, desactivadas para la línea v7 y v10).
+- Edge Impulse: las muestras de la 005 se reactivaron el 5 oct, y el modelo entrenado en el proyecto sigue siendo la v8 hasta reentrenar o restaurar la v5. Para el v10 hay que volver a desactivar la 005 antes de entrenar.
 
 ### 7. Cámara con exposición más corta — en espera
 
@@ -153,6 +153,7 @@ Si el despegue sale menos borroso, el detector lo ve más cuadros. Solo aplica a
 - **C930e en la Pi:** probar exposiciones cortas con `v4l2-ctl` (`deployment.md`, sección 5).
 - **FPS:** la C930e graba a 30 fps y las reglas se ajustaron a 60 fps. Revisar `max_hits` y `max_gap_s` de `FlashExits` con un video de esa cámara.
 - **Cámara fija:** el sistema supone que la piquera no se mueve en la imagen.
+- **Prueba de la cámara con un video en pantalla (en espera, 5 oct):** apuntar la C930e a una pantalla con el `0040-1` en pantalla completa, la piquera al centro de la imagen, y correr en la Pi con `--video 0 --cam-width 1280 --cam-height 720 --cam-fps 30 --roi-x 640 --roi-y 360 --roi-r 220 ... --dashboard --output video_camara.mp4`; traer el video con `scp`. La Pi no tiene escritorio: el video anotado solo se ve después. Sirve para ver que detecta, no para medir conteos (parpadeo, reflejos y tamaño cambian las detecciones).
 
 ### 8. Eventos con hora real — después
 
