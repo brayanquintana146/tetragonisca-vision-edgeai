@@ -10,13 +10,14 @@ from src.counter import BeeCounterHybrid
 CX, CY, R, FPS = 500.0, 500.0, 100.0, 30
 
 
-def run(path, t_end):
-    """path: t -> (x, y) en radios relativos al centro de la ROI. Devuelve (in, out)."""
-    tr = BeeTracker(scale=R)
-    co = BeeCounterHybrid((CX, CY), R)
+def run(path, t_end, tracker_kw=None, **kw):
+    """path: t -> (x, y) en radios relativos al centro de la ROI, o None si no se ve. Devuelve (in, out)."""
+    tr = BeeTracker(scale=R, **(tracker_kw or {}))
+    co = BeeCounterHybrid((CX, CY), R, **kw)
     for t in np.arange(0, t_end, 1.0 / FPS):
-        x, y = path(t)
-        active, finished = tr.update([(CX + x * R, CY + y * R, 0.9)], t)
+        p = path(t)
+        dets = [] if p is None else [(CX + p[0] * R, CY + p[1] * R, 0.9)]
+        active, finished = tr.update(dets, t)
         co.update(active, finished)
     co.update([], tr.flush())
     return co.in_count, co.out_count
@@ -59,6 +60,29 @@ def test_simple_entry():
     assert run(path, 2.0) == (1, 0)
 
 
+def test_old_track_does_not_enter():
+    # Revolotea fuera 5 s y luego entra: con in_max_age no cuenta (guardiana o punto del fondo).
+    def path(t):
+        if t < 5.0:
+            return (2.0 + 0.3 * np.sin(6.0 * t), 0.0)
+        return (max(2.0 - (t - 5.0) * 2.0, 0.2), 0.0)
+    assert run(path, 7.0) == (1, 0)
+    assert run(path, 7.0, in_max_age=3.0) == (0, 0)
+
+
+def test_parked_point_jump_is_not_an_entry():
+    # Un punto quieto fuera de la ROI 1 s; se apaga y el track salta a una abeja en la piquera.
+    def path(t):
+        if t < 1.0:
+            return (1.3, 0.0)
+        if t < 1.15:
+            return None
+        return (0.4, 0.0)
+    kw = dict(tracker_kw=dict(accel_std=260.0))
+    assert run(path, 2.0, **kw) == (1, 0)
+    assert run(path, 2.0, in_park_s=0.15, **kw) == (0, 0)
+
+
 def run_flashes(flashes, rep_s=None, t_end=30.0):
     """flashes: {frame: (x, y)} detecciones sueltas fuera de la ROI, en radios. Devuelve las salidas."""
     co = BeeCounterHybrid((CX, CY), R, flash_exits=True, rep_s=rep_s)
@@ -94,6 +118,8 @@ if __name__ == "__main__":
     test_two_exits_same_track()
     test_peek_and_return_cancels()
     test_simple_entry()
+    test_old_track_does_not_enter()
+    test_parked_point_jump_is_not_an_entry()
     test_fixed_spot_repeated()
     test_flashes_elsewhere_still_count()
     test_still_flash_is_not_a_takeoff()

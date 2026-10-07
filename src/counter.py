@@ -311,6 +311,12 @@ class BeeCounterHybrid:
     donde ya había algo: ese punto es una sombra o una abeja quieta que FOMO ve a ratos, y el
     tracker salta hacia ella cuando pierde a una abeja de la boca.
 
+    Con `in_max_age` (segundos, p. ej. 3) una entrada solo cuenta si el track nació hace ese tiempo
+    o menos: la abeja que entra lo hace enseguida, y un track viejo que "entra" suele ser una
+    guardiana o un punto del fondo. Con `in_park_s` (p. ej. 0.15) tampoco cuenta si el track estuvo
+    quieto fuera de la ROI (a menos de `park_near` escalas) ese tiempo o más justo antes de entrar:
+    es un punto fijo del fondo que salta a una abeja que aparece en la piquera.
+
     Con `rep_s` (segundos, p. ej. 60; necesita `flash_exits`) una salida fugaz no cuenta si sale de
     un punto fijo repetido: un sitio del fondo que FOMO confunde con una abeja y que se enciende
     una y otra vez sin moverse, con más de `static_s` entre una vez y otra (ver FlashExits).
@@ -318,13 +324,17 @@ class BeeCounterHybrid:
 
     def __init__(self, roi_center, roi_radius, cancel_s=0.5, proj_min_speed=1.5, in_back_project=False,
                  flash_exits=False, track_scale=None, core=None, static_s=None, static_gap=0.1,
-                 static_near=0.1, rep_s=None, rep_k=2, **kw):
+                 static_near=0.1, rep_s=None, rep_k=2, in_max_age=None, in_park_s=None, park_near=0.15, **kw):
         self._in = BeeCounterV2(roi_center, roi_radius, back_project=in_back_project, **kw)
         self._out = BeeCounterCross(roi_center, roi_radius, cancel_s=cancel_s,
                                     proj_min_speed=float("inf") if flash_exits else proj_min_speed, **kw)
         self._flash = FlashExits(roi_center, roi_radius, scale=track_scale,
                                  rep_s=rep_s, rep_k=rep_k) if flash_exits else None
         self._c = np.array(roi_center, dtype=float)
+        self._in_max_age = in_max_age
+        self._in_park_s = in_park_s
+        self._park_near = park_near * float(roi_radius if track_scale is None else track_scale)
+        self._r = float(roi_radius)
         self._core = None if not core else core * float(roi_radius)
         self._core_t = {}      # track id -> tiempos en que estuvo dentro del centro
         self._last_out = {}    # track id -> tiempo de su última salida aceptada
@@ -337,17 +347,23 @@ class BeeCounterHybrid:
         self.in_count = 0
         self.out_count = 0
 
-    def update(self, active_tracks, finished_tracks=(), detections=None, t=None, final=False):
+    def update(self, active_tracks, finished_tracks=(), detections=None, t=None, final=False, parked=None):
         n_in, n_out = len(self._in.events), len(self._out.events)
         self._in.update(active_tracks, finished_tracks)
         self._out.update(active_tracks, finished_tracks)
         new = [e for e in self._in.events[n_in:] if e[1] == "in"]
+        if (self._in_max_age is not None or self._in_park_s is not None) and new:
+            by_id = {tr.id: tr for tr in list(active_tracks) + list(finished_tracks)}
+            if self._in_max_age is not None:
+                new = [e for e in new if e[2] not in by_id or e[0] - by_id[e[2]].t_first <= self._in_max_age]
+            if self._in_park_s is not None:
+                new = [e for e in new if e[2] not in by_id or self._parked_s(by_id[e[2]], e[0]) < self._in_park_s]
         new += [e for e in self._out.events[n_out:] if e[1] == "out"]
         if self._core is not None:
             new = self._gate_core(new, active_tracks, finished_tracks, final)
         if self._flash is not None:
             if detections is not None:
-                self._flash.observe(detections, active_tracks, t)
+                self._flash.observe(detections, active_tracks, t, parked)
             new += self._flash.collect(self._out.events, t, final=final)
         if self._static_s and detections is not None:
             new = [e for e in new if e[1] != "out" or not self._static(e)]
@@ -362,6 +378,19 @@ class BeeCounterHybrid:
             else:
                 self.out_count += 1
         return {"in": self.in_count, "out": self.out_count}
+
+    def _parked_s(self, tr, te):
+        """Segundos que el track estuvo quieto fuera de la ROI justo antes de entrar."""
+        hits = [h for h in tr.hits if h[0] <= te + 1e-9]
+        k = len(hits) - 1
+        while k >= 0 and np.hypot(hits[k][1] - self._c[0], hits[k][2] - self._c[1]) < self._r:
+            k -= 1
+        if k < 0:
+            return 0.0
+        j = k
+        while j > 0 and np.hypot(hits[j - 1][1] - hits[k][1], hits[j - 1][2] - hits[k][2]) < self._park_near:
+            j -= 1
+        return hits[k][0] - hits[j][0]
 
     def _static(self, e):
         te, x, y = e[0], e[3], e[4]
@@ -478,7 +507,17 @@ class FlashExits:
             return           # se acerca a la piquera: es una abeja que llega
         self._cand.append(tl[0][:3])
 
-    def observe(self, detections, active_tracks, t):
+    def _quiet(self, tl):
+        return len(tl) >= 2 and all(np.hypot(p[1] - tl[0][1], p[2] - tl[0][2]) < self.rep_near for p in tl)
+
+    def observe(self, detections, active_tracks, t, parked=None):
+        """parked: ids de tracks estacionados (BeeTracker.is_parked), o None si no se usa. No son
+        abejas volando: solo tapan su propio sitio, no los despegues que pasan cerca, y un trazo
+        quieto tampoco se enlaza con una detección lejana."""
+        local = parked is not None
+        parked = parked or ()
+        spots = [tr.last_hit_pos for tr in active_tracks if tr.id in parked]
+        active_tracks = [tr for tr in active_tracks if tr.id not in parked]
         seen = [tr.last_hit_pos for tr in active_tracks if tr.t_last_hit == t]
         keep = []
         for tl in self._open:
@@ -501,11 +540,14 @@ class FlashExits:
                 continue
             if any(np.hypot(x - p[0], y - p[1]) < self.near for p in seen):
                 continue
+            if any(np.hypot(x - p[0], y - p[1]) < self.rep_near * 1.5 for p in spots):
+                continue
             best = None
             for tl in self._open:
                 dt = t - tl[-1][0]
                 dd = float(np.hypot(x - tl[-1][1], y - tl[-1][2]))
-                if 0 < dt <= self.max_gap_s and dd <= self.max_speed * dt and (best is None or dd < best[0]):
+                reach = self.rep_near if (local and self._quiet(tl)) else self.max_speed * dt
+                if 0 < dt <= self.max_gap_s and dd <= reach and (best is None or dd < best[0]):
                     best = (dd, tl)
             if best is not None:
                 best[1].append((t, x, y, d))

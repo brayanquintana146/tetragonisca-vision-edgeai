@@ -249,6 +249,16 @@ def main():
     parser.add_argument("--rep-k", type=int, default=2,
                         help="con --rep-s: marcas en el mismo punto para descartarlo (un destello quieto de 2 frames "
                              "o más vale por 2)")
+    parser.add_argument("--in-max-age", type=float, default=None,
+                        help="hibrido: una entrada solo cuenta si el track nació hace N segundos o menos. La abeja que "
+                             "entra lo hace enseguida; un track viejo que 'entra' suele ser una guardiana o un punto "
+                             "del fondo. Recomendado: 3")
+    parser.add_argument("--in-park-s", type=float, default=None,
+                        help="hibrido: una entrada no cuenta si el track estuvo quieto fuera de la ROI N segundos o más "
+                             "justo antes de entrar (un punto del fondo que salta a una abeja). Recomendado: 0.15")
+    parser.add_argument("--park-s", type=float, default=None,
+                        help="hibrido + --flash-exits: un track quieto N segundos o más fuera de la ROI (mancha del "
+                             "fondo) deja de tapar los despegues que pasan cerca. Recomendado: 0.9")
     parser.add_argument("--flash-exits", action="store_true",
                         help="hibrido: contar también las salidas que FOMO solo ve 1-3 frames (despegues borrosos) "
                              "y no proyectar fuera de la ROI los tracks que se cierran")
@@ -279,6 +289,10 @@ def main():
         parser.error("--static-s necesita --flash-exits")
     if args.rep_s and not args.flash_exits:
         parser.error("--rep-s necesita --flash-exits")
+    if args.park_s and not args.flash_exits:
+        parser.error("--park-s necesita --flash-exits")
+    if (args.in_max_age or args.in_park_s) and args.counter != "hibrido":
+        parser.error("--in-max-age y --in-park-s necesitan --counter hibrido")
 
     # Inicializar detector FOMO con LiteRT (v2 usa un umbral bajo y filtra después)
     det_threshold = min(args.threshold, args.assoc_threshold) if use_v2 else args.threshold
@@ -327,13 +341,15 @@ def main():
         # Todas las distancias del tracker v2 se miden en radios de la ROI
         tracker = BeeTracker(scale=track_scale, max_lost_s=args.max_lost, birth_min_prob=args.threshold,
                              max_gate=args.max_gate, accel_std=args.accel_std,
-                             max_gate_tentative=args.max_gate_tentative)
+                             max_gate_tentative=args.max_gate_tentative,
+                             park_s=args.park_s, park_zone=(args.roi_x, args.roi_y, args.roi_r))
         if args.counter == "hibrido":
             counter = BeeCounterHybrid(roi_center=(args.roi_x, args.roi_y), roi_radius=args.roi_r,
                                        cancel_s=args.cancel_s, proj_min_speed=args.proj_min_speed,
                                        flash_exits=args.flash_exits, track_scale=track_scale,
                                        core=args.core, static_s=args.static_s,
-                                       rep_s=args.rep_s, rep_k=args.rep_k)
+                                       rep_s=args.rep_s, rep_k=args.rep_k,
+                                       in_max_age=args.in_max_age, in_park_s=args.in_park_s)
         else:
             counter = BeeCounterV2(roi_center=(args.roi_x, args.roi_y), roi_radius=args.roi_r)
     else:
@@ -442,7 +458,8 @@ def main():
             active, finished = tracker.update(centroids, t_frame)
             # 3. Conteo origen-destino
             if args.flash_exits:
-                counts = counter.update(active, finished, detections=centroids, t=t_frame)
+                parked = {tr.id for tr in active if tracker.is_parked(tr)} if args.park_s else None
+                counts = counter.update(active, finished, detections=centroids, t=t_frame, parked=parked)
             else:
                 counts = counter.update(active, finished)
             objects = {tr.id: tr.pos for tr in active if tr.misses <= 2}

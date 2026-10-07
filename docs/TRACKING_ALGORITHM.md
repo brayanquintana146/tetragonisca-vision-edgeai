@@ -118,7 +118,45 @@ Con `--rep-k 1` se pierden 4 salidas reales del `0040-1`, por eso se piden 2 mar
 
 En esos videos la regla no cambia las salidas de v5, salvo en el `00517-18` (19 → 18). En el `0020-1` (colmena 002, desarrollo, *Pseudo* 7): v7 9 → 8 y v5 16 → 9.
 
-**Límites:** los tres videos nuevos no tienen conteo de referencia, así que son totales y no aciertos; falta contar uno a mano. La memoria de 60 s solo se probó con videos de un minuto.
+**Conteo a mano del `00511-12` (7 oct 2026):** 23 entradas y 13 salidas. Los eventos del programa estaban guardados antes de ese conteo. Con v7, las salidas pasan de 7 bien / 15 contadas (F1 0.50, azar 0.12) a 7 / 11 (F1 0.58, azar 0.14): la regla quita 4 falsas y ninguna real. Las entradas no cambian: 19 / 29 (F1 0.73, azar 0.14). v5, que vio la 005, da 19 / 20 (0.88) y 11 / 14 (0.81).
+
+**Límites:** los otros dos videos nuevos no tienen conteo de referencia, así que son totales y no aciertos. La memoria de 60 s solo se probó con videos de un minuto.
+
+### Manchas fijas del fondo (`--in-max-age`, `--in-park-s`, `--park-s`)
+
+**Problema:** en una colmena que el modelo no conoce, algunas manchas del fondo se detectan como abeja casi todo el tiempo y el tracker las sigue como abejas quietas. Pasan dos cosas:
+- Cuando una abeja aparece en la piquera, el track de la mancha salta a ella y el contador ve una entrada que no existió.
+- La mancha cuenta como "abeja que ya andaba por ahí" y tapa los despegues que pasan cerca (reglas 1 y 4 de `--flash-exits`).
+
+En el `00511-12`, v7 contaba 10 entradas falsas de 29 y perdía 6 de 13 salidas. La falla se reprodujo sin tocar la 005: con 4 manchas fijas inyectadas en las detecciones del `0040-1` aparecen ~10 entradas falsas y se pierden ~7 salidas reales; y el modelo del primer commit del repo, que no conocía la colmena 003, cuenta 47 entradas en el `0031-2` donde hay 37.
+
+**Reglas:**
+- `--in-max-age 3`: una entrada solo cuenta si el track nació hace 3 s o menos. La abeja que entra lo hace enseguida (en el `0040-1`, la más lenta tarda 1.7 s). Un track viejo que "entra" es una guardiana o una mancha.
+- `--in-park-s 0.15`: una entrada no cuenta si el track estuvo quieto fuera de la ROI (menos de 0.15 escalas) 0.15 s o más justo antes de entrar. Es una mancha que salta a una abeja.
+- `--park-s 0.9`: un track quieto 0.9 s o más fuera de la ROI (menos de 0.1 escalas, `BeeTracker.is_parked`) es un track estacionado. Solo tapa su propio sitio, no cuenta para la regla 4 y un trazo quieto no se enlaza con una detección lejana.
+
+**Cómo se eligieron (7 oct 2026):** con el `0040-1` y el `0031-2`, los dos contados a mano, y con manchas inyectadas en el `0040-1` (6 semillas). "Antes" ya incluye `--rep-s 60`. Cada celda es bien / contadas y F1.
+
+| Video | Modelo | Entradas antes | Entradas después | Salidas antes | Salidas después |
+| :--- | :--- | :---: | :---: | :---: | :---: |
+| `0040-1` | v7 | 25 / 32, 0.74 | igual | 45 / 50, 0.70 | igual |
+| `0040-1` | v5 | 29 / 33, 0.84 | igual | 45 / 46, 0.73 | igual |
+| `0031-2` | v7 | 20 / 36, 0.55 | 20 / 30, 0.60 | 10 / 19, 0.54 | igual |
+| `0031-2` | v5 | 29 / 40, 0.75 | 29 / 35, 0.81 | 14 / 25, 0.65 | igual |
+| `0031-2` | primer commit (no conocía la 003) | 23 / 47, 0.55 | 20 / 32, 0.58 | 4 / 18, 0.22 | 5 / 22, 0.25 |
+
+Con 4 manchas inyectadas en el `0040-1` (v7; sin manchas hay 7 entradas falsas y 45 salidas bien):
+
+| Manchas | Entradas falsas antes | después | Salidas bien antes | después |
+| :--- | :---: | :---: | :---: | :---: |
+| Parpadean (70% del tiempo) | 18.0 | 6.8 | 38.2 | 39.5 |
+| Fijas (95% del tiempo) | 9.2 | 6.5 | 35.7 | 39.7 |
+
+**Descartado:**
+- Quitar las detecciones de los puntos quietos antes del tracker: parte los tracks de las guardianas que revolotean (en el `0031-2`, v7 pasa de 36 a 45 entradas contadas).
+- Achicar la ventana de asociación de los tracks estacionados: el modelo que no conocía la 003 pierde entre 5 y 9 entradas reales del `0031-2`.
+
+**Límites:** las salidas perdidas por manchas solo se recuperan en parte. El `0031-2` muestra que v7 es peor que v5 también en una colmena que los dos conocen (entradas 0.60 contra 0.81), así que no toda su desventaja en la 005 viene de no conocerla.
 
 ### Escala del tracker (`--track-scale`)
 

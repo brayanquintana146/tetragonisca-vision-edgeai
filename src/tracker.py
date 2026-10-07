@@ -220,7 +220,8 @@ class BeeTracker:
     def __init__(self, scale, accel_std=40.0, meas_std=0.08, init_vel_std=4.0,
                  gate_sigma=3.0, min_gate=0.35, max_gate=1.2,
                  max_lost_s=0.6, tentative_lost_s=0.1, min_hits=2,
-                 birth_min_prob=0.55, max_hits_kept=60, max_gate_tentative=None):
+                 birth_min_prob=0.55, max_hits_kept=60, max_gate_tentative=None,
+                 park_s=None, park_near=0.1, park_zone=None):
         """
         scale:            px que equivalen a 1 unidad (radio de la ROI).
         accel_std:        aceleración típica de una abeja (unidades/s²). Alto = reacciona rápido.
@@ -252,6 +253,12 @@ class BeeTracker:
         self.min_hits = min_hits
         self.birth_min_prob = birth_min_prob
         self.max_hits_kept = max_hits_kept
+        # Tracks estacionados (ver is_parked): llevan park_s segundos sin moverse más de park_near
+        # unidades, fuera de park_zone (cx, cy, radio en px). Suelen ser manchas del fondo que FOMO
+        # confunde con una abeja; el contador los usa para que no tapen los despegues cercanos.
+        self.park_s = park_s
+        self.park_near = park_near * s
+        self.park_zone = park_zone
 
         self.tracks = OrderedDict()   # {id: Track}
         self.next_id = 0              # IDs internos (incluye tentativos)
@@ -281,6 +288,23 @@ class BeeTracker:
         K = tr.P @ self.H.T @ np.linalg.inv(S)
         tr.x = tr.x + K @ y
         tr.P = (np.eye(4) - K @ self.H) @ tr.P
+
+    def is_parked(self, tr):
+        """¿El track lleva park_s segundos quieto (y está fuera de park_zone)?"""
+        if not self.park_s or not tr.confirmed:
+            return False
+        t1, x1, y1 = tr.hits[-1]
+        if self.park_zone is not None:
+            cx, cy, zr = self.park_zone
+            if (x1 - cx) ** 2 + (y1 - cy) ** 2 < zr * zr:
+                return False
+        n2 = self.park_near ** 2
+        for t0, x0, y0 in reversed(tr.hits):
+            if (x0 - x1) ** 2 + (y0 - y1) ** 2 > n2:
+                return False
+            if t1 - t0 >= self.park_s:
+                return True
+        return False
 
     def _gate(self, tr):
         S = tr.P[:2, :2] + self.R
