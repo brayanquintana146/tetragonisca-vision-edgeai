@@ -158,6 +158,28 @@ Con 4 manchas inyectadas en el `0040-1` (v7; sin manchas hay 7 entradas falsas y
 
 **Límites:** las salidas perdidas por manchas solo se recuperan en parte. El `0031-2` muestra que v7 es peor que v5 también en una colmena que los dos conocen (entradas 0.60 contra 0.81), así que no toda su desventaja en la 005 viene de no conocerla.
 
+### Examen a ciegas en la colmena 005 (7 oct 2026)
+
+Videos `0056-7` y `00519-20`, nunca usados antes, contados a mano por Brayan (31 entradas y 33 salidas en total). Las reglas se congelaron en el commit `cfe0bdc` antes de correr; se corrió una sola vez y el conteo a mano se abrió después. Zona de entrada elegida del primer cuadro (`--roi-r 100 --track-scale 220 --core 0.5`). Medición estricta, los dos videos sumados. Cada celda es bien / contadas y F1. El F1 al azar va de 0.01 a 0.28 según el video.
+
+| Modelo | Configuración | Entradas (de 31) | Salidas (de 33) |
+| :--- | :--- | :---: | :---: |
+| v7 (nunca vio la 005) | recomendada del 5 oct | 24 / 33, 0.75 | 19 / 35, 0.56 |
+| v7 | + `--rep-s 60` | 24 / 33, 0.75 | 20 / 24, **0.70** |
+| v7 | + `--in-max-age 3 --in-park-s 0.15 --park-s 0.9` (la congelada) | 21 / 23, **0.78** | 20 / 28, 0.66 |
+| v8 (v7 + fotos del fondo) | recomendada del 5 oct | 24 / 32, 0.76 | 18 / 45, 0.46 |
+| v8 | la congelada | 24 / 25, 0.86 | 17 / 26, 0.58 |
+| v5 (vio la 005) | recomendada del 5 oct | 27 / 30, 0.89 | 23 / 26, 0.78 |
+| v5 | la congelada | 25 / 28, 0.85 | 23 / 27, 0.77 |
+
+Lectura:
+- `--rep-s 60` se confirma: a v7 le quita 12 salidas falsas (de 16 a 4) y no pierde ninguna real.
+- Las reglas de entradas (`--in-max-age`, `--in-park-s`) le quitan a v7 7 entradas falsas de 9, pero también 3 reales de 24. Ayudan al modelo que no conoce la colmena (v7 y v8) y le restan un poco a v5.
+- `--park-s` **no se confirma**: no recuperó ninguna salida y agregó 4 falsas a v7. No usarla hasta probarla con más videos.
+- Sin fotos del fondo, v7 queda cerca del modelo que sí conoce la colmena en salidas (0.70 contra 0.78) y por debajo en entradas (0.75–0.78 contra 0.85–0.89).
+- Examen único: los errores de estos dos videos no se analizaron uno por uno, para que sirvan otra vez con un modelo reentrenado.
+- Son dos minutos y 64 eventos: uno o dos eventos mueven el F1 unos 0.03.
+
 ### Escala del tracker (`--track-scale`)
 
 El tracker mide todas sus distancias en múltiplos de una escala: cuánto puede moverse una abeja entre frames (`--max-gate`), qué tan cerca deben estar dos celdas de FOMO para ser una sola abeja (0.25 escalas) y dónde busca `--flash-exits`. Por defecto la escala es el radio de la ROI.
