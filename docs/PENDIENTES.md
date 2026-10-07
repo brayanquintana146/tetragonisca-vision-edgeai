@@ -37,7 +37,7 @@ Es lo que más puede mejorar las salidas. Hoy las 273 borrosas del entrenamiento
 
 1. Sacar cuadros de videos de la colmena 003 con `scripts/05_extraer_borrosas.py`.
 2. Etiquetarlos en Edge Impulse. Separar train y test **por video**.
-3. Entrenar igual que v7: 480×480, FOMO, **con la 005 desactivada**. Guardarlo como versión nueva (v9) y exportar el `.lite` a `models/` con otro nombre.
+3. Entrenar igual que v7: 480×480, FOMO, **con la 005 desactivada**. Guardarlo como versión nueva (v10; la v9 de Edge Impulse es el YOLO-Pro descartado por lento) y exportar el `.lite` a `models/` con otro nombre.
 4. Avisar a Claude: el modelo nuevo pasa por el mismo examen con las mismas reglas congeladas.
 
 **Videos que NO se pueden usar para entrenar:**
@@ -46,7 +46,7 @@ Es lo que más puede mejorar las salidas. Hoy las 273 borrosas del entrenamiento
 
 ### 2. Etiquetar despegues reales — Claude prepara, Brayan etiqueta
 
-`--flash-exits` ya encuentra muchos despegues. Claude saca esos cuadros de videos de la 003 y la 004 (mismas exclusiones del punto 1) para que Brayan solo revise y etiquete. Van al mismo modelo v9.
+`--flash-exits` ya encuentra muchos despegues. Claude saca esos cuadros de videos de la 003 y la 004 (mismas exclusiones del punto 1) para que Brayan solo revise y etiquete. Van al mismo modelo v10.
 
 - Falta: que Brayan confirme para empezar.
 
