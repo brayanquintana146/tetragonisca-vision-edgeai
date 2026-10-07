@@ -13,8 +13,7 @@ Leer esta lista y [PRUEBA_CIEGA_V7.md](PRUEBA_CIEGA_V7.md). Lo primero es resolv
 1. **Cambio de nombre de los modelos.** Está hecho en `feature/algoritmo-conteo` pero **sin commit**: archivos de `models/` con la versión al inicio y referencias en `main.py`, `README.md`, `deployment.md`, `docs/PENDIENTES.md`, `bench/` y `scripts/`. Falta su sí para el commit. En esta rama (`feature/puntos-fijos-repetidos`) la documentación todavía usa los nombres viejos en algunos sitios.
 2. **Unir esta rama a `feature/algoritmo-conteo`** y subirla a GitHub. Falta su sí.
 3. **Sacar los cuadros borrosos** de la 001 y la 003 y los despegues de la 003 y la 004. Falta su sí (implica descomprimir `001 - MOT.zip`, 1.8 GB).
-4. **Las dos imágenes de la colmena 001** con la piquera en sus dos posiciones: las anunció pero no llegaron. Hacen falta para fijar la zona de entrada de cada grupo de videos de la 001.
-5. **Raspberry Pi:** si tiene modelos con el nombre viejo, renombrarlos o copiarlos de nuevo.
+4. **Raspberry Pi:** si tiene modelos con el nombre viejo, renombrarlos o copiarlos de nuevo.
 
 ## Estado actual
 
@@ -82,7 +81,10 @@ Por qué:
 - **Sí tiene videos:** 36, dentro de `all_datasets\001 - MOT.zip` (sin descomprimir). 15 traen archivo de conteo *Pseudo*.
 - **Sus fotos se recortaron antes de subirlas a Edge Impulse** (solo esta colmena): de 1920×1080 a 1280×720 desde (260, 100), con FastStone. Las abejas quedaron 1.5 veces más grandes. Ver README, paso 2.5, y `scripts/fix_crop_labels.py`.
 - **Consecuencia:** el modelo conoce las abejas de la 001 agrandadas. Para sacar borrosas o para contar en un video de la 001 hay que usar el mismo aumento: un cuadrado de 720 px alrededor de la piquera, no de 1080. `scripts/05_extraer_borrosas.py` y `main.py --crop-roi` hoy usan 1080: falta agregar una opción de tamaño de recorte.
-- **La cámara se movió una vez:** la piquera aparece en dos posiciones según el video. Hay que fijar la zona de entrada para cada grupo de videos mirando el primer cuadro.
+- **La cámara se movió una vez:** la piquera aparece en dos posiciones según el video. Dos fotos de muestra que mandó Brayan (ya recortadas a 1280×720):
+  - `0012-3` (cuadro 316): boca del tubo cerca de (510, 185) en la foto recortada, o sea (770, 285) en el video original.
+  - `0018-9` (cuadro 3075): boca cerca de (410, 360) en la foto recortada, o sea (670, 460) en el video original.
+  - Son valores leídos a ojo de una foto: sirven de guía. Falta ver entre qué videos ocurrió el cambio y fijar la zona de entrada de cada video mirando su primer cuadro.
 - La 001 es una colmena conocida por todos los modelos: sirve para entrenar y para desarrollo, no para pruebas a ciegas.
 
 ## Pendientes (en orden de importancia)
