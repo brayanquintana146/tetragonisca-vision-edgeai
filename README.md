@@ -670,4 +670,22 @@ Las entradas casi no cambian (31 contra 32), así que el detector reconoce a las
 
 **Conclusión.** En las dos colmenas nuevas (`0020-1` y la 005 con el modelo v7), las **entradas** quedan cerca de la referencia y las **salidas** se inflan por falsos positivos del detector en puntos fijos del fondo. La v8 lo confirma: al instalar el sistema en una colmena nueva, la calibración debe incluir fotos del fondo de esa piquera sin abejas (clase negativa) y no solo ajustar la ROI.
 
+### Examen a ciegas con v7 en la colmena 005 (7 oct 2026)
+
+Pregunta: ¿cuenta el sistema en una colmena que el modelo nunca vio, sin fotos de su fondo? Protocolo, tablas completas y límites en [`docs/PRUEBA_CIEGA_V7.md`](docs/PRUEBA_CIEGA_V7.md); las reglas nuevas, en [TRACKING_ALGORITHM.md](docs/TRACKING_ALGORITHM.md).
+
+- Las reglas del contador se ajustaron solo con el `0040-1` y el `0031-2` (colmenas 004 y 003, los dos contados a mano). Nunca con videos de la 005 ni de la 002.
+- Examen: videos `0056-7` y `00519-20`, nunca usados, contados a mano (31 entradas y 33 salidas). Reglas congeladas antes de correr (commit `cfe0bdc`), una sola corrida, conteo a mano abierto después.
+- Configuración: la recomendada del 5 oct + `--rep-s 60 --in-max-age 3 --in-park-s 0.15 --park-s 0.9`, con `--roi-r 100 --track-scale 220 --core 0.5` y la zona de entrada elegida del primer cuadro.
+
+| Modelo | Entradas bien / contadas (de 31), F1 | Salidas bien / contadas (de 33), F1 |
+| :--- | :---: | :---: |
+| **v7 (nunca vio la 005, sin fotos del fondo)** | 21 / 23, **0.78** | 20 / 28, **0.66** |
+| v8 (v7 + 50 fotos del fondo) | 24 / 25, 0.86 | 17 / 26, 0.58 |
+| v5 (vio la 005) | 25 / 28, 0.85 | 23 / 27, 0.77 |
+
+El F1 al azar va de 0.01 a 0.28 según el video. Detección foto por foto en la 005 (349 fotos, umbral 0.5): v7 F1 0.70 (recall 0.94, precisión 0.55), v8 0.83, v5 0.92.
+
+**Conclusión actualizada.** v7 cuenta en una colmena nueva sin fotos del fondo, muy por encima del azar, pero por debajo del modelo que la conoce. Las salidas son el punto débil y el límite es el detector: ni v5 encuentra más de 7 de cada 10. v7 también es peor que v5 en la colmena 003, que los dos conocen, así que no toda la diferencia viene de no conocer la 005. Son dos minutos y 64 eventos.
+
 Los siguientes pasos están en [`docs/PENDIENTES.md`](docs/PENDIENTES.md).
