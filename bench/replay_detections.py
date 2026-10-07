@@ -43,6 +43,8 @@ def main():
     ap.add_argument("--track-scale", type=float, default=None)
     ap.add_argument("--core", type=float, default=None)
     ap.add_argument("--static-s", type=float, default=None)
+    ap.add_argument("--rep-s", type=float, default=None)
+    ap.add_argument("--rep-k", type=int, default=2)
     a = ap.parse_args()
 
     with gzip.open(a.dets, "rt", encoding="utf-8") as f:
@@ -61,7 +63,7 @@ def main():
         counter = BeeCounterHybrid(roi_center=(a.roi_x, a.roi_y), roi_radius=a.roi_r,
                                    cancel_s=a.cancel_s, proj_min_speed=a.proj_min_speed,
                                    flash_exits=a.flash_exits, track_scale=track_scale,
-                                   core=a.core, static_s=a.static_s)
+                                   core=a.core, static_s=a.static_s, rep_s=a.rep_s, rep_k=a.rep_k)
     else:
         counter = BeeCounterV2(roi_center=(a.roi_x, a.roi_y), roi_radius=a.roi_r)
 

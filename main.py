@@ -242,6 +242,13 @@ def main():
     parser.add_argument("--static-s", type=float, default=None,
                         help="hibrido + --flash-exits: descarta una salida si en su punto ya había una detección en los "
                              "N segundos anteriores (sombra o abeja quieta que FOMO ve a ratos). Recomendado: 2.0")
+    parser.add_argument("--rep-s", type=float, default=None,
+                        help="hibrido + --flash-exits: memoria (s) de puntos fijos repetidos. Una salida fugaz no cuenta "
+                             "si su punto ya se encendió --rep-k veces sin moverse (fondo que FOMO confunde con una "
+                             "abeja en una colmena nueva). Recomendado: 60")
+    parser.add_argument("--rep-k", type=int, default=2,
+                        help="con --rep-s: marcas en el mismo punto para descartarlo (un destello quieto de 2 frames "
+                             "o más vale por 2)")
     parser.add_argument("--flash-exits", action="store_true",
                         help="hibrido: contar también las salidas que FOMO solo ve 1-3 frames (despegues borrosos) "
                              "y no proyectar fuera de la ROI los tracks que se cierran")
@@ -270,6 +277,8 @@ def main():
         parser.error("--flash-exits necesita --tracker v2 --counter hibrido")
     if args.static_s and not args.flash_exits:
         parser.error("--static-s necesita --flash-exits")
+    if args.rep_s and not args.flash_exits:
+        parser.error("--rep-s necesita --flash-exits")
 
     # Inicializar detector FOMO con LiteRT (v2 usa un umbral bajo y filtra después)
     det_threshold = min(args.threshold, args.assoc_threshold) if use_v2 else args.threshold
@@ -323,7 +332,8 @@ def main():
             counter = BeeCounterHybrid(roi_center=(args.roi_x, args.roi_y), roi_radius=args.roi_r,
                                        cancel_s=args.cancel_s, proj_min_speed=args.proj_min_speed,
                                        flash_exits=args.flash_exits, track_scale=track_scale,
-                                       core=args.core, static_s=args.static_s)
+                                       core=args.core, static_s=args.static_s,
+                                       rep_s=args.rep_s, rep_k=args.rep_k)
         else:
             counter = BeeCounterV2(roi_center=(args.roi_x, args.roi_y), roi_radius=args.roi_r)
     else:

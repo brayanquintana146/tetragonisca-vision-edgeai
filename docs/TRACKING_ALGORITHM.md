@@ -85,6 +85,41 @@ En el `0040-1`, `--core 0.5 --cancel-s 1.0` baja las salidas falsas de 13 a 3. C
 
 Las entradas no cambian. La regla se creó mirando el `0020-1`, así que ese video ya no es una prueba ciega de ella.
 
+### Puntos fijos repetidos (`--rep-s`)
+
+**Problema:** con un modelo que nunca vio la colmena (v7 en la 005), FOMO confunde puntos fijos del fondo con abejas. Cada punto se enciende 1–3 frames, siempre en el mismo sitio y con más de 2 s entre una vez y otra. `--static-s 2` no lo filtra y `--flash-exits` cuenta una salida cada vez: en el `00517-18`, 18 de 26 salidas fugaces salían de 4 puntos.
+
+**Regla:** con `--rep-s 60`, cada trazo fuera de la ROI que no se movió de su sitio (menos de 0.1 escalas) deja una marca ahí. Un trazo quieto de 2 frames o más vale 2 marcas. Una salida fugaz no cuenta si:
+- en su punto hay 2 marcas o más (`--rep-k`) de otros momentos dentro de los últimos 60 s, o
+- su propio trazo estuvo quieto 2 frames o más.
+
+Una abeja que despega no repite el sitio ni se queda quieta. La regla está en `FlashExits`, se aprende del propio video y no usa fotos del fondo. No se aplica a las salidas por cruce: ahí quitaba una salida real del `0040-1`. Las entradas no cambian.
+
+**Cómo se eligió (7 oct 2026):** solo con el `0040-1` y el `0031-2` (colmenas conocidas) y con puntos falsos inyectados en las detecciones del `0040-1` (4 puntos, ~8 parpadeos por minuto cada uno, 10 semillas). No se usó ningún video de la 005 ni de la 002.
+
+| Desarrollo | Sin | Con `--rep-s 60` |
+| :--- | :---: | :---: |
+| `0040-1`, v7: salidas bien / contadas, F1 (azar) | 45 / 50, 0.70 (0.34) | 45 / 50, 0.70 (0.34) |
+| `0040-1`, v5: salidas bien / contadas, F1 (azar) | 45 / 47, 0.72 (0.39) | 45 / 46, 0.73 (0.38) |
+| `0031-2`, v7: salidas (*Pseudo* 21) | 23 | 19 |
+| `0031-2`, v5: salidas (*Pseudo* 21) | 25 | 25 |
+| `0040-1`, v7 + puntos inyectados: salidas falsas | 25.6 | 9.0 |
+
+Con `--rep-k 1` se pierden 4 salidas reales del `0040-1`, por eso se piden 2 marcas. Las dos primeras veces que un punto se enciende un solo frame todavía cuentan.
+
+**Colmena 005 con v7 (nunca la vio), salidas:**
+
+| Video | Tipo | Sin | Con `--rep-s 60` | v5 (vio la 005) | *Pseudo* |
+| :--- | :--- | :---: | :---: | :---: | :---: |
+| `0055-6` | primera corrida, sin referencia | 23 | 12 | 12 | – |
+| `00511-12` | primera corrida, sin referencia | 15 | 11 | 14 | – |
+| `00521-22` | primera corrida, sin referencia | 26 | 22 | 20 | – |
+| `00517-18` | desarrollo | 34 | 16 | 19 | 16 |
+
+En esos videos la regla no cambia las salidas de v5, salvo en el `00517-18` (19 → 18). En el `0020-1` (colmena 002, desarrollo, *Pseudo* 7): v7 9 → 8 y v5 16 → 9.
+
+**Límites:** los tres videos nuevos no tienen conteo de referencia, así que son totales y no aciertos; falta contar uno a mano. La memoria de 60 s solo se probó con videos de un minuto.
+
 ### Escala del tracker (`--track-scale`)
 
 El tracker mide todas sus distancias en múltiplos de una escala: cuánto puede moverse una abeja entre frames (`--max-gate`), qué tan cerca deben estar dos celdas de FOMO para ser una sola abeja (0.25 escalas) y dónde busca `--flash-exits`. Por defecto la escala es el radio de la ROI.

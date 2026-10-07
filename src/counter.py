@@ -310,15 +310,20 @@ class BeeCounterHybrid:
     entre `static_s` y `static_gap` segundos antes. Una abeja que se va no sale de un sitio
     donde ya había algo: ese punto es una sombra o una abeja quieta que FOMO ve a ratos, y el
     tracker salta hacia ella cuando pierde a una abeja de la boca.
+
+    Con `rep_s` (segundos, p. ej. 60; necesita `flash_exits`) una salida fugaz no cuenta si sale de
+    un punto fijo repetido: un sitio del fondo que FOMO confunde con una abeja y que se enciende
+    una y otra vez sin moverse, con más de `static_s` entre una vez y otra (ver FlashExits).
     """
 
     def __init__(self, roi_center, roi_radius, cancel_s=0.5, proj_min_speed=1.5, in_back_project=False,
                  flash_exits=False, track_scale=None, core=None, static_s=None, static_gap=0.1,
-                 static_near=0.1, **kw):
+                 static_near=0.1, rep_s=None, rep_k=2, **kw):
         self._in = BeeCounterV2(roi_center, roi_radius, back_project=in_back_project, **kw)
         self._out = BeeCounterCross(roi_center, roi_radius, cancel_s=cancel_s,
                                     proj_min_speed=float("inf") if flash_exits else proj_min_speed, **kw)
-        self._flash = FlashExits(roi_center, roi_radius, scale=track_scale) if flash_exits else None
+        self._flash = FlashExits(roi_center, roi_radius, scale=track_scale,
+                                 rep_s=rep_s, rep_k=rep_k) if flash_exits else None
         self._c = np.array(roi_center, dtype=float)
         self._core = None if not core else core * float(roi_radius)
         self._core_t = {}      # track id -> tiempos en que estuvo dentro del centro
@@ -419,9 +424,18 @@ class FlashExits:
 
     def __init__(self, roi_center, roi_radius, scale=None, r_min=1.0, r_max=2.5, near=0.4, max_gap_s=0.04,
                  max_speed=84.0, max_hits=3, inward=0.1, dedup_s=0.4, dedup_deg=40.0, hold_s=1.5,
-                 recent_s=0.5, recent_near=0.6):
+                 recent_s=0.5, recent_near=0.6, rep_s=None, rep_near=0.1, rep_k=2, rep_gap=0.1,
+                 rep_w2=2, rep_self=True):
         """scale: px de la escala del tracker (--track-scale); por defecto el radio de la ROI.
-        La zona de búsqueda va desde el borde de la ROI hasta (r_max - 1) escalas más afuera."""
+        La zona de búsqueda va desde el borde de la ROI hasta (r_max - 1) escalas más afuera.
+
+        rep_s: memoria (s) de los puntos fijos. Un punto del fondo que FOMO confunde con una abeja
+        se enciende siempre en el mismo sitio, una y otra vez; una abeja que despega no repite el
+        sitio ni se queda quieta. Cada trazo que no se movió de su sitio (a menos de `rep_near`
+        escalas) deja una marca; si duró 2 frames o más vale `rep_w2` marcas. Una salida no cuenta
+        si en su punto hay `rep_k` marcas o más de otros momentos (separadas más de `rep_gap` s)
+        dentro de los últimos `rep_s` segundos, ni (con `rep_self`) si su propio trazo estuvo quieto
+        2 frames o más. Se aprende del propio video, sin fotos del fondo."""
         self.c = np.array(roi_center, dtype=float)
         self.r = float(roi_radius)
         s = self.r if scale is None else float(scale)
@@ -435,11 +449,29 @@ class FlashExits:
         self._open = []      # trazos abiertos: listas de (t, x, y, d)
         self._cand = []      # salidas candidatas (t, x, y), esperando hold_s
         self._done = []      # salidas aceptadas (t, x, y)
+        self.rep_s, self.rep_near, self.rep_k, self.rep_gap = rep_s, rep_near * s, rep_k, rep_gap
+        self.rep_w2, self.rep_self = rep_w2, rep_self
+        self._spots = []     # (t, x, y, peso) de trazos que no se movieron de su sitio
 
     def _ang(self, x, y):
         return np.degrees(np.arctan2(y - self.c[1], x - self.c[0]))
 
+    def is_fixed_spot(self, te, x, y):
+        """¿Hay rep_k o más marcas de otros momentos en este punto dentro de la memoria?"""
+        if not self.rep_s:
+            return False
+        n = sum(w for ts, sx, sy, w in self._spots
+                if te - self.rep_s <= ts and abs(ts - te) > self.rep_gap
+                and np.hypot(x - sx, y - sy) < self.rep_near)
+        return n >= self.rep_k
+
     def _close(self, tl):
+        if self.rep_s and all(np.hypot(p[1] - tl[0][1], p[2] - tl[0][2]) < self.rep_near for p in tl):
+            # quieto varios frames seguidos: una abeja en vuelo no hace eso, vale como rep_w2 marcas
+            quieto = len(tl) >= 2
+            self._spots.append(tl[0][:3] + (self.rep_w2 if quieto else 1,))
+            if quieto and self.rep_self:
+                return
         if len(tl) > self.max_hits:
             return
         if len(tl) >= 2 and tl[-1][3] < tl[0][3] - self.inward:
@@ -488,8 +520,12 @@ class FlashExits:
             self._open = []
         ready = [c for c in self._cand if final or (t is not None and t - c[0] >= self.hold_s)]
         self._cand = [c for c in self._cand if c not in ready]
+        if self.rep_s and t is not None:
+            self._spots = [q for q in self._spots if t - q[0] <= self.rep_s + self.hold_s + 1.0]
         new = []
         for tc, x, y in sorted(ready):
+            if self.is_fixed_spot(tc, x, y):
+                continue
             a = self._ang(x, y)
             prev = [(e[0], e[3], e[4]) for e in out_events if e[1] == "out"] + self._done
             if any(abs(te - tc) < self.dedup_s and abs((self._ang(px, py) - a + 180) % 360 - 180) < self.dedup_deg

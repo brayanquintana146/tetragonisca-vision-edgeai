@@ -59,8 +59,42 @@ def test_simple_entry():
     assert run(path, 2.0) == (1, 0)
 
 
+def run_flashes(flashes, rep_s=None, t_end=30.0):
+    """flashes: {frame: (x, y)} detecciones sueltas fuera de la ROI, en radios. Devuelve las salidas."""
+    co = BeeCounterHybrid((CX, CY), R, flash_exits=True, rep_s=rep_s)
+    for i, t in enumerate(np.arange(0, t_end, 1.0 / FPS)):
+        dets = [(CX + flashes[i][0] * R, CY + flashes[i][1] * R, 0.5)] if i in flashes else []
+        co.update([], [], detections=dets, t=t)
+    co.update([], [], final=True)
+    return co.out_count
+
+
+def test_fixed_spot_repeated():
+    # Un punto del fondo que se enciende 8 veces en el mismo sitio, cada 3 s: sin rep_s son
+    # 8 salidas falsas; con rep_s solo pasan las 2 primeras (todavía no hay 2 marcas).
+    flashes = {FPS * (1 + 3 * k): (2.0, 0.0) for k in range(8)}
+    assert run_flashes(flashes) == 8
+    assert run_flashes(flashes, rep_s=60) == 2
+
+
+def test_flashes_elsewhere_still_count():
+    # Despegues en sitios distintos: rep_s no quita ninguno.
+    flashes = {FPS * (1 + 3 * k): (2.0, 0.3 * k - 1.0) for k in range(8)}
+    assert run_flashes(flashes, rep_s=60) == 8
+
+
+def test_still_flash_is_not_a_takeoff():
+    # Un destello quieto 2 frames seguidos no es una abeja que despega.
+    flashes = {FPS: (2.0, 0.0), FPS + 1: (2.0, 0.0)}
+    assert run_flashes(flashes) == 1
+    assert run_flashes(flashes, rep_s=60) == 0
+
+
 if __name__ == "__main__":
     test_two_exits_same_track()
     test_peek_and_return_cancels()
     test_simple_entry()
+    test_fixed_spot_repeated()
+    test_flashes_elsewhere_still_count()
+    test_still_flash_is_not_a_takeoff()
     print("OK")
