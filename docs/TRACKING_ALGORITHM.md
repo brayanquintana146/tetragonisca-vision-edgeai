@@ -85,6 +85,108 @@ En el `0040-1`, `--core 0.5 --cancel-s 1.0` baja las salidas falsas de 13 a 3. C
 
 Las entradas no cambian. La regla se creó mirando el `0020-1`, así que ese video ya no es una prueba ciega de ella.
 
+### Puntos fijos repetidos (`--rep-s`)
+
+**Problema:** con un modelo que nunca vio la colmena (v7 en la 005), FOMO confunde puntos fijos del fondo con abejas. Cada punto se enciende 1–3 frames, siempre en el mismo sitio y con más de 2 s entre una vez y otra. `--static-s 2` no lo filtra y `--flash-exits` cuenta una salida cada vez: en el `00517-18`, 18 de 26 salidas fugaces salían de 4 puntos.
+
+**Regla:** con `--rep-s 60`, cada trazo fuera de la ROI que no se movió de su sitio (menos de 0.1 escalas) deja una marca ahí. Un trazo quieto de 2 frames o más vale 2 marcas. Una salida fugaz no cuenta si:
+- en su punto hay 2 marcas o más (`--rep-k`) de otros momentos dentro de los últimos 60 s, o
+- su propio trazo estuvo quieto 2 frames o más.
+
+Una abeja que despega no repite el sitio ni se queda quieta. La regla está en `FlashExits`, se aprende del propio video y no usa fotos del fondo. No se aplica a las salidas por cruce: ahí quitaba una salida real del `0040-1`. Las entradas no cambian.
+
+**Cómo se eligió (7 oct 2026):** solo con el `0040-1` y el `0031-2` (colmenas conocidas) y con puntos falsos inyectados en las detecciones del `0040-1` (4 puntos, ~8 parpadeos por minuto cada uno, 10 semillas). No se usó ningún video de la 005 ni de la 002.
+
+| Desarrollo | Sin | Con `--rep-s 60` |
+| :--- | :---: | :---: |
+| `0040-1`, v7: salidas bien / contadas, F1 (azar) | 45 / 50, 0.70 (0.34) | 45 / 50, 0.70 (0.34) |
+| `0040-1`, v5: salidas bien / contadas, F1 (azar) | 45 / 47, 0.72 (0.39) | 45 / 46, 0.73 (0.38) |
+| `0031-2`, v7: salidas (*Pseudo* 21) | 23 | 19 |
+| `0031-2`, v5: salidas (*Pseudo* 21) | 25 | 25 |
+| `0040-1`, v7 + puntos inyectados: salidas falsas | 25.6 | 9.0 |
+
+Con `--rep-k 1` se pierden 4 salidas reales del `0040-1`, por eso se piden 2 marcas. Las dos primeras veces que un punto se enciende un solo frame todavía cuentan.
+
+**Colmena 005 con v7 (nunca la vio), salidas:**
+
+| Video | Tipo | Sin | Con `--rep-s 60` | v5 (vio la 005) | *Pseudo* |
+| :--- | :--- | :---: | :---: | :---: | :---: |
+| `0055-6` | primera corrida, sin referencia | 23 | 12 | 12 | – |
+| `00511-12` | primera corrida, sin referencia | 15 | 11 | 14 | – |
+| `00521-22` | primera corrida, sin referencia | 26 | 22 | 20 | – |
+| `00517-18` | desarrollo | 34 | 16 | 19 | 16 |
+
+En esos videos la regla no cambia las salidas de v5, salvo en el `00517-18` (19 → 18). En el `0020-1` (colmena 002, desarrollo, *Pseudo* 7): v7 9 → 8 y v5 16 → 9.
+
+**Conteo a mano del `00511-12` (7 oct 2026):** 23 entradas y 13 salidas. Los eventos del programa estaban guardados antes de ese conteo. Con v7, las salidas pasan de 7 bien / 15 contadas (F1 0.50, azar 0.12) a 7 / 11 (F1 0.58, azar 0.14): la regla quita 4 falsas y ninguna real. Las entradas no cambian: 19 / 29 (F1 0.73, azar 0.14). v5, que vio la 005, da 19 / 20 (0.88) y 11 / 14 (0.81).
+
+**Límites:** los otros dos videos nuevos no tienen conteo de referencia, así que son totales y no aciertos. La memoria de 60 s solo se probó con videos de un minuto.
+
+### Manchas fijas del fondo (`--in-max-age`, `--in-park-s`, `--park-s`)
+
+**Problema:** en una colmena que el modelo no conoce, algunas manchas del fondo se detectan como abeja casi todo el tiempo y el tracker las sigue como abejas quietas. Pasan dos cosas:
+- Cuando una abeja aparece en la piquera, el track de la mancha salta a ella y el contador ve una entrada que no existió.
+- La mancha cuenta como "abeja que ya andaba por ahí" y tapa los despegues que pasan cerca (reglas 1 y 4 de `--flash-exits`).
+
+En el `00511-12`, v7 contaba 10 entradas falsas de 29 y perdía 6 de 13 salidas. La falla se reprodujo sin tocar la 005: con 4 manchas fijas inyectadas en las detecciones del `0040-1` aparecen ~10 entradas falsas y se pierden ~7 salidas reales; y el modelo del primer commit del repo, que no conocía la colmena 003, cuenta 47 entradas en el `0031-2` donde hay 37.
+
+**Reglas:**
+- `--in-max-age 3`: una entrada solo cuenta si el track nació hace 3 s o menos. La abeja que entra lo hace enseguida (en el `0040-1`, la más lenta tarda 1.7 s). Un track viejo que "entra" es una guardiana o una mancha.
+- `--in-park-s 0.15`: una entrada no cuenta si el track estuvo quieto fuera de la ROI (menos de 0.15 escalas) 0.15 s o más justo antes de entrar. Es una mancha que salta a una abeja.
+- `--park-s 0.9`: un track quieto 0.9 s o más fuera de la ROI (menos de 0.1 escalas, `BeeTracker.is_parked`) es un track estacionado. Solo tapa su propio sitio, no cuenta para la regla 4 y un trazo quieto no se enlaza con una detección lejana.
+
+**Cómo se eligieron (7 oct 2026):** con el `0040-1` y el `0031-2`, los dos contados a mano, y con manchas inyectadas en el `0040-1` (6 semillas). "Antes" ya incluye `--rep-s 60`. Cada celda es bien / contadas y F1.
+
+| Video | Modelo | Entradas antes | Entradas después | Salidas antes | Salidas después |
+| :--- | :--- | :---: | :---: | :---: | :---: |
+| `0040-1` | v7 | 25 / 32, 0.74 | igual | 45 / 50, 0.70 | igual |
+| `0040-1` | v5 | 29 / 33, 0.84 | igual | 45 / 46, 0.73 | igual |
+| `0031-2` | v7 | 20 / 36, 0.55 | 20 / 30, 0.60 | 10 / 19, 0.54 | igual |
+| `0031-2` | v5 | 29 / 40, 0.75 | 29 / 35, 0.81 | 14 / 25, 0.65 | igual |
+| `0031-2` | primer commit (no conocía la 003) | 23 / 47, 0.55 | 20 / 32, 0.58 | 4 / 18, 0.22 | 5 / 22, 0.25 |
+
+Con 4 manchas inyectadas en el `0040-1` (v7; sin manchas hay 7 entradas falsas y 45 salidas bien):
+
+| Manchas | Entradas falsas antes | después | Salidas bien antes | después |
+| :--- | :---: | :---: | :---: | :---: |
+| Parpadean (70% del tiempo) | 18.0 | 6.8 | 38.2 | 39.5 |
+| Fijas (95% del tiempo) | 9.2 | 6.5 | 35.7 | 39.7 |
+
+**Descartado:**
+- Quitar las detecciones de los puntos quietos antes del tracker: parte los tracks de las guardianas que revolotean (en el `0031-2`, v7 pasa de 36 a 45 entradas contadas).
+- Achicar la ventana de asociación de los tracks estacionados: el modelo que no conocía la 003 pierde entre 5 y 9 entradas reales del `0031-2`.
+
+**Límites:** las salidas perdidas por manchas solo se recuperan en parte. El `0031-2` muestra que v7 es peor que v5 también en una colmena que los dos conocen (entradas 0.60 contra 0.81), así que no toda su desventaja en la 005 viene de no conocerla.
+
+### Examen a ciegas en la colmena 005 (7 oct 2026)
+
+Videos `0056-7` y `00519-20`, nunca usados antes, contados a mano por Brayan (31 entradas y 33 salidas en total). Las reglas se congelaron en el commit `cfe0bdc` antes de correr; se corrió una sola vez y el conteo a mano se abrió después. Zona de entrada elegida del primer cuadro (`--roi-r 100 --track-scale 220 --core 0.5`). Medición estricta, los dos videos sumados. Cada celda es bien / contadas y F1. El F1 al azar va de 0.01 a 0.28 según el video.
+
+**Resultado oficial** (la configuración congelada: recomendada del 5 oct + `--rep-s 60 --in-max-age 3 --in-park-s 0.15 --park-s 0.9`):
+
+| Modelo | Entradas (de 31) | Salidas (de 33) |
+| :--- | :---: | :---: |
+| **v7 (nunca vio la 005)** | 21 / 23, **0.78** | 20 / 28, **0.66** |
+| v8 (v7 + fotos del fondo) | 24 / 25, 0.86 | 17 / 26, 0.58 |
+| v5 (vio la 005) | 25 / 28, 0.85 | 23 / 27, 0.77 |
+
+- Lo que se puede afirmar: sin fotos del fondo, v7 saca F1 0.78 en entradas y 0.66 en salidas en una colmena que nunca vio. El modelo que sí la conoce, con las mismas reglas, saca 0.85 y 0.77.
+- Examen único: los errores de estos dos videos no se analizaron uno por uno, para que sirvan otra vez con un modelo reentrenado.
+- Son dos minutos y 64 eventos: uno o dos eventos mueven el F1 unos 0.03.
+
+**Análisis por partes (no es el resultado oficial).** Sirve solo para ver qué aportó cada regla; elegir la mejor fila después de ver el examen sería seleccionar con el propio examen.
+
+| Modelo | Configuración | Entradas (de 31) | Salidas (de 33) |
+| :--- | :--- | :---: | :---: |
+| v7 | recomendada del 5 oct | 24 / 33, 0.75 | 19 / 35, 0.56 |
+| v7 | + `--rep-s 60` | 24 / 33, 0.75 | 20 / 24, 0.70 |
+| v8 | recomendada del 5 oct | 24 / 32, 0.76 | 18 / 45, 0.46 |
+| v5 | recomendada del 5 oct | 27 / 30, 0.89 | 23 / 26, 0.78 |
+
+- `--rep-s 60` le quita a v7 12 salidas falsas (de 16 a 4) y no pierde ninguna real.
+- Las reglas de entradas (`--in-max-age`, `--in-park-s`) le quitan a v7 7 entradas falsas de 9, pero también 3 reales de 24. Ayudan al modelo que no conoce la colmena (v7 y v8) y le restan un poco a v5.
+- `--park-s` no recuperó ninguna salida y agregó 4 falsas a v7. Quitarla parece mejor, pero esa conclusión sale de mirar el examen: es desarrollo. La versión sin `--park-s` necesita otro examen a ciegas antes de poder citarla.
+
 ### Escala del tracker (`--track-scale`)
 
 El tracker mide todas sus distancias en múltiplos de una escala: cuánto puede moverse una abeja entre frames (`--max-gate`), qué tan cerca deben estar dos celdas de FOMO para ser una sola abeja (0.25 escalas) y dónde busca `--flash-exits`. Por defecto la escala es el radio de la ROI.

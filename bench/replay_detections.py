@@ -43,6 +43,11 @@ def main():
     ap.add_argument("--track-scale", type=float, default=None)
     ap.add_argument("--core", type=float, default=None)
     ap.add_argument("--static-s", type=float, default=None)
+    ap.add_argument("--rep-s", type=float, default=None)
+    ap.add_argument("--rep-k", type=int, default=2)
+    ap.add_argument("--in-max-age", type=float, default=None)
+    ap.add_argument("--in-park-s", type=float, default=None)
+    ap.add_argument("--park-s", type=float, default=None)
     a = ap.parse_args()
 
     with gzip.open(a.dets, "rt", encoding="utf-8") as f:
@@ -56,12 +61,14 @@ def main():
 
     track_scale = a.track_scale or a.roi_r
     tracker = BeeTracker(scale=track_scale, max_lost_s=a.max_lost, birth_min_prob=a.threshold,
-                         max_gate=a.max_gate, accel_std=a.accel_std, max_gate_tentative=a.max_gate_tentative)
+                         max_gate=a.max_gate, accel_std=a.accel_std, max_gate_tentative=a.max_gate_tentative,
+                         park_s=a.park_s, park_zone=(a.roi_x, a.roi_y, a.roi_r))
     if a.counter == "hibrido":
         counter = BeeCounterHybrid(roi_center=(a.roi_x, a.roi_y), roi_radius=a.roi_r,
                                    cancel_s=a.cancel_s, proj_min_speed=a.proj_min_speed,
                                    flash_exits=a.flash_exits, track_scale=track_scale,
-                                   core=a.core, static_s=a.static_s)
+                                   core=a.core, static_s=a.static_s, rep_s=a.rep_s, rep_k=a.rep_k,
+                                   in_max_age=a.in_max_age, in_park_s=a.in_park_s)
     else:
         counter = BeeCounterV2(roi_center=(a.roi_x, a.roi_y), roi_radius=a.roi_r)
 
@@ -70,7 +77,8 @@ def main():
         centroids = cluster_centroids(raw, merge_radius=0.25 * track_scale)
         active, finished = tracker.update(centroids, i / fps)
         if a.flash_exits:
-            counter.update(active, finished, detections=centroids, t=i / fps)
+            parked = {tr.id for tr in active if tracker.is_parked(tr)} if a.park_s else None
+            counter.update(active, finished, detections=centroids, t=i / fps, parked=parked)
         else:
             counter.update(active, finished)
     if a.flash_exits:

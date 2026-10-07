@@ -1,109 +1,173 @@
 # Pendientes — tetragonisca-vision-edgeai
 
-Última actualización: 5 de octubre de 2026 (noche). Rama: `feature/algoritmo-conteo`.
+Última actualización: 7 de octubre de 2026 (tarde). Rama: `feature/algoritmo-conteo` (ya incluye `feature/puntos-fijos-repetidos`).
 
-Lo hecho está en el [README](../README.md) (configuración recomendada, validación del conteo y prueba de generalización) y en [TRACKING_ALGORITHM.md](TRACKING_ALGORITHM.md) (contador híbrido, salidas fugaces, boca de la piquera, puntos quietos y escala del tracker). Los números para las láminas están en `/mnt/project-files/tetragonisca/resultados_presentacion.md`.
+Lo hecho está en el [README](../README.md), en [TRACKING_ALGORITHM.md](TRACKING_ALGORITHM.md) y en [PRUEBA_CIEGA_V7.md](PRUEBA_CIEGA_V7.md) (protocolo y tablas completas de la prueba sin trampa).
+
+## Para arrancar la próxima sesión
+
+Leer esta lista y [PRUEBA_CIEGA_V7.md](PRUEBA_CIEGA_V7.md), y seguir el orden de "Pendientes". Antes de ejecutar algo, preguntar a Brayan.
+
+### Decidido con Brayan el 7 oct (tarde)
+
+- El cambio de nombre de los modelos ya tiene commit, y la rama de la mejora ya está unida a `feature/algoritmo-conteo` y subida a GitHub.
+- **Todavía no se ejecuta nada de los pendientes.** No sacar cuadros ni correr scripts hasta que Brayan lo diga.
+- **Brayan descomprime `001 - MOT.zip`** (1.8 GB). Claude no lo hace.
+- **Raspberry Pi:** si tiene modelos con el nombre viejo, renombrarlos o copiarlos de nuevo.
 
 ## Estado actual
 
-- **Modelo:** v5, 480×480, con 273 abejas borrosas (`models/v5_fomo_borrosas_480_int8.lite`). *Model testing*: F1 0.94.
-- **Configuración recomendada:**
+- **Meta:** que el modelo cuente bien en una colmena que nunca vio, sin cargar fotos de su fondo.
+- **Modelos** (nombre nuevo, con la versión al inicio; coincide con las versiones de Edge Impulse):
+
+  | Versión | Archivo | Qué es |
+  | :--- | :--- | :--- |
+  | v3 | `v3_fomo_tetragonisca_int8.lite` | colmenas 004, 005, 001 y 003. 320×320 |
+  | v4 | `v4_fomo_nuevo_int8.lite` | v3 + 196 despegues del `0040-1`. 320×320. Rama aparte |
+  | v5 | `v5_fomo_borrosas_480_int8.lite` | v3 sin el `0040-1` + 273 borrosas de la 004. 480×480. Referencia |
+  | v6 | `v6_fomo_borrosas_320_int8.lite` | v5 en 320×320 |
+  | v7 | `v7_fomo_sin005_480_int8.lite` | v5 sin la colmena 005. **El de la meta** |
+  | v8 | `v8_fomo_sin005_confondo_480_int8.lite` | v7 + 50 fotos del fondo de la 005 |
+  | v9 | (sin archivo) | v5 con YOLO-Pro. Descartado por lento |
+  | v10 | (por entrenar) | v7 + borrosas de la 001 y la 003 |
+
+  Ninguno vio la 002. La 006 no se usa (cámara en mano).
+- **Configuración del examen:**
   ```powershell
-  --crop-roi --counter hibrido --max-gate 0.9 --max-gate-tentative 1.2 --accel-std 260 --threshold 0.7 --max-lost 0.3 --proj-min-speed 3.0 --flash-exits --static-s 2 --core 0.5 --cancel-s 1.0
+  --crop-roi --counter hibrido --max-gate 0.9 --max-gate-tentative 1.2 --accel-std 260 --threshold 0.7 --max-lost 0.3 --proj-min-speed 3.0 --flash-exits --static-s 2 --core 0.5 --cancel-s 1.0 --rep-s 60 --in-max-age 3 --in-park-s 0.15 --park-s 0.9
   ```
-  Por colmena se fijan ROI, `--core` y `--track-scale` mirando la imagen.
-- **Colmenas en el entrenamiento** (historial de Edge Impulse): 001, 003, 004 y 005. **Nunca vistas:** 002 y 006.
+  Por video solo se elige la zona de entrada mirando el primer cuadro. En la 005: `--roi-r 100 --track-scale 220`.
 
-| Video | Colmena | Tipo | Salidas | Entradas | Referencia (sal. / ent.) |
-| :--- | :--- | :--- | :---: | :---: | :---: |
-| `0040-1` | 004 (conocida) | desarrollo, anotado a mano | 47 (F1 0.72) | 33 (F1 0.84) | 78 / 36 (a mano) |
-| `0031-2` | 003 (conocida) | desarrollo | 25 | 40 | 21 / 32 |
-| `00517-18` | 005 (conocida) | primera corrida ciega: 20 / 23; calibrada: 23 / 32 | 18 | 30 | 16 / 30 |
-| `0020-1` | 002 (**nueva**) | **ciega: 43 / 8**; luego se creó `--static-s` | 16 | 8 | 7 / 11 |
-| `0062-2M` | 006 (**nueva**) | ciega, cámara en mano: no sirve para medir | 25 | 42 | 15 / 17 |
+**Examen a ciegas en la 005** (`0056-7` y `00519-20`, contados a mano: 31 entradas y 33 salidas; una sola corrida). Cada celda es bien / contadas y F1.
 
-Las salidas y entradas de la tabla son con `--static-s 2`. En el `0031-2` y el `00517-18` salen del replay de las detecciones guardadas, todavía no corridas en el PC.
+| Modelo | Entradas | Salidas |
+| :--- | :---: | :---: |
+| v7 (nunca vio la 005) | 21 / 23, 0.78 | 20 / 28, 0.66 |
+| v8 | 24 / 25, 0.86 | 17 / 26, 0.58 |
+| v5 (vio la 005) | 25 / 28, 0.85 | 23 / 27, 0.77 |
 
-- **Conclusión honesta:** en colmenas conocidas el conteo queda cerca de la referencia. En la única colmena nueva válida (`0020-1`) la corrida ciega falló en las salidas por una sombra. Todavía no se puede decir que generaliza.
+- **Conclusión honesta:** v7 funciona en una colmena nueva sin fotos del fondo, pero por debajo del modelo que la conoce. El punto débil son las salidas y el límite es el detector: ni v5 encuentra más de 7 de cada 10, porque la abeja que despega sale borrosa.
+- **Límites de la evidencia:** una sola colmena nueva, 2 minutos y 64 eventos, un solo anotador, colmenas del mismo conjunto de datos.
 
-## Pendientes (en orden)
+## Decisión del 7 oct: la referencia es el conteo a mano, no el *Pseudo*
 
-### 0. Contar a mano el `0020-1` (siguiente paso)
+Desde hoy los resultados se miden contra el conteo a mano de Brayan, evento por evento. El *Pseudo* del paper queda solo como dato secundario.
 
-Es la única colmena nueva válida y tiene pocos eventos (~18). Con la anotación se mide precisión, recall y F1 de la corrida ciega (`ev_0020-1.csv`, 43 salidas / 8 entradas) en una colmena que el modelo nunca vio:
+Por qué:
+- El *Pseudo* lo hizo una persona ayudada por el tracker del propio paper (EuTrack), así que no es independiente.
+- Solo da totales. Un total puede coincidir por casualidad aunque los eventos estén mal.
+- Incluye guardianas; el conteo a mano no (definición de este proyecto).
+- No es exacto: en la colmena 001 el biólogo y el *Pseudo* difieren hasta en 16 entradas en un video.
 
+**Reglas del conteo a mano:** no contar guardianas, ni cuando entran ni cuando salen; marcar cuando la abeja cruza el círculo; clic sobre la abeja; no mirar lo que contó el programa.
+
+**Cómo probó el paper** (Leocádio et al., BRACIS 2023), para citarlo bien:
+- Detector: 2100 fotos de las 6 colmenas, repartidas en 1500 / 300 / 300. Las tres partes tienen las mismas colmenas: no mide una colmena nueva.
+- Conteo: un video por colmena más 6 videos de la 001, comparando totales contra el *Pseudo* con error relativo promedio.
+- Usa YOLOv8x, un modelo grande que no corre en una Raspberry.
+
+**Videos con conteo a mano** (`data/gt_*.csv`):
+
+| Video | Colmena | Uso | Entradas / salidas |
+| :--- | :--- | :--- | :---: |
+| `0040-1` | 004 | desarrollo (dos conteos, coinciden en 110 de 112) | 36 / 78 |
+| `0031-2` | 003 | desarrollo | 37 / 18 |
+| `00511-12` | 005 | a ciegas para `--rep-s`; desarrollo para lo demás | 23 / 13 |
+| `0056-7` | 005 | examen | 3 / 9 |
+| `00519-20` | 005 | examen | 28 / 24 |
+
+## Colmena 001: lo que hay que saber antes de usarla
+
+- **Sí tiene videos:** 36, dentro de `all_datasets\001 - MOT.zip` (sin descomprimir). 15 traen archivo de conteo *Pseudo*.
+- **Sus fotos se recortaron antes de subirlas a Edge Impulse** (solo esta colmena): de 1920×1080 a 1280×720 desde (260, 100), con FastStone. Las abejas quedaron 1.5 veces más grandes. Ver README, paso 2.5, y `scripts/fix_crop_labels.py`.
+- **Consecuencia:** el modelo conoce las abejas de la 001 agrandadas. Para sacar borrosas o para contar en un video de la 001 hay que usar el mismo aumento: un cuadrado de 720 px alrededor de la piquera, no de 1080. `scripts/05_extraer_borrosas.py` y `main.py --crop-roi` hoy usan 1080: falta agregar una opción de tamaño de recorte.
+- **La cámara se movió una vez:** la piquera aparece en dos posiciones según el video. Dos fotos de muestra que mandó Brayan (son fotos ya recortadas a 1280×720, no las originales):
+  - `0012-3` (cuadro 316): boca del tubo cerca de (510, 185) en la foto recortada, o sea (770, 285) en el video original.
+  - `0018-9` (cuadro 3075): boca cerca de (410, 360) en la foto recortada, o sea (670, 460) en el video original.
+  - Son valores leídos a ojo de una foto: sirven de guía. Falta ver entre qué videos ocurrió el cambio y fijar la zona de entrada de cada video mirando su primer cuadro.
+- La 001 es una colmena conocida por todos los modelos: sirve para entrenar y para desarrollo, no para pruebas a ciegas.
+
+## Pendientes (en orden de importancia)
+
+### 1. Entrenar el modelo v10 con más abejas borrosas — Claude prepara, Brayan etiqueta y entrena
+
+Es lo que más puede mejorar las salidas. Hoy las 273 borrosas son todas de la colmena 004.
+
+| Colmena | Borrosas hoy | Videos para sacar | Estimado |
+| :--- | :---: | :---: | :---: |
+| 001 | 0 | 21 (los 36 menos los 15 con *Pseudo*, que se apartan) | 100 a 150 |
+| 003 | 0 | 40 (sin el `0031-2`) | 200 a 280 |
+| 004 | 273 | ya usada | – |
+
+El estimado sale de las ~6 por video de la 004; el número real depende de la actividad.
+
+Pasos:
+1. (Claude) Agregar a `scripts/05_extraer_borrosas.py` la opción de tamaño de recorte, para la 001.
+2. (Brayan) Descomprimir `001 - MOT.zip`. (Claude) Fijar la zona de entrada por grupo de videos y sacar los cuadros de la 001 y la 003, cuando Brayan lo diga.
+3. (Brayan) Revisar y etiquetar en Edge Impulse. Apartar 5 o 6 videos completos de cada colmena para test: nunca cuadros del mismo video en train y en test.
+4. (Brayan) Entrenar igual que v7: 480×480, FOMO, **con la 005 desactivada**. Guardarlo como v10 y exportar `models/v10_..._int8.lite`.
+5. (Claude) Pasar v10 por el mismo examen, con las mismas reglas congeladas.
+
+**Videos que NO se pueden usar para entrenar:**
+- Colmena 005 completa (si no, el modelo deja de ser "nunca vio la 005"), 002 y 006.
+- Los contados a mano o usados en pruebas: `0040-1`, `00427-28`, `0031-2`.
+- Los 15 videos de la 001 con *Pseudo*, que se apartan para desarrollo.
+
+### 2. Etiquetar despegues reales — Claude prepara, Brayan etiqueta
+
+`--flash-exits` ya encuentra muchos despegues. Claude saca esos cuadros de videos de la 001, la 003 y la 004 (mismas exclusiones del punto 1) para que Brayan solo revise y etiquete. Van al mismo modelo v10.
+
+### 3. Contar a mano más videos — Brayan
+
+Brayan decidió contar todo lo que haga falta, sin importar el tiempo. Orden sugerido:
+
+1. **Examen de la 005, más eventos:** `00523-24` (ya se corrió; `--roi-x 1075 --roi-y 640 --roi-r 100`).
+2. **Colmena 002, la que ningún modelo vio:** `0020-1` (`--roi-x 570 --roi-y 815 --roi-r 180`). Es desarrollo, pero da la primera medida evento por evento en la 002.
+3. **Más videos de la 005 sin tocar**, para un segundo examen: `0053-4`, `0054-5`, `0057-8`, `0059-10`, `00510-11`, `00513-14`, `00515-16`, `00520-21`, `00522-23`, `00524-25`. Pedir a Claude la zona de entrada antes de anotar. Claude no los corre hasta congelar la versión que se quiera examinar.
+4. **Videos de la 002 sin tocar** (25 más), para una segunda colmena nueva. Es lo que más fortalece la afirmación de que generaliza.
+5. **Desarrollo:** `00521-22` y `0055-6` (005), `00517-18` (005) y algunos de la 001, para ajustar reglas con más de dos videos.
+
+Comando (desde la carpeta del repo):
 ```powershell
-python tools/anotar_eventos.py --video "C:\Users\Brayan\Projects\all_datasets\002 - MOT\0020-1.mp4" --roi-x 570 --roi-y 815 --roi-r 180 --out data/gt_0020-1.csv
-python bench/compare_events.py data/gt_0020-1.csv ev_0020-1.csv --tol 0.5 --max-angle 40
+python tools/anotar_eventos.py --video "RUTA\VIDEO.mp4" --roi-x X --roi-y Y --roi-r R --out data/gt_VIDEO.csv
 ```
 
-Anotar mirando solo el video, sin ver el CSV del programa.
+### 4. Repetir la prueba dejando fuera otra colmena — después del v10
 
-### 1. Dejar fuera la colmena 005 (*leave-one-hive-out*) — decidido el 5 oct
+Hoy la evidencia es de una sola colmena nueva (la 005). Para decir que generaliza hace falta repetirlo: entrenar sin la 003 y examinar en la 003, y lo mismo con la 004. Y examinar en la 002, que ningún modelo vio.
 
-Objetivo: tener una segunda colmena nueva para el modelo, con referencia *Pseudo*.
+### 5. Decidir sobre `--park-s` — Claude
 
-1. **Edge Impulse:** la v5 (480) y la v6 (320, F1 0.91, guardada el 5 oct) ya están como versiones. El proyecto quedó en 320: volver a poner **480×480** en *Create impulse*. En *Data acquisition*, filtrar las imágenes de la colmena 005 y desactivarlas (*Disable*), tanto en entrenamiento como en test.
-2. **Entrenar** con los mismos ajustes que la v5 (480×480, FOMO). **Hecho (5 oct):** 344 de train y 50 de test desactivadas (294 imágenes `005…` + 50 fondos `bg_unknown` identificados por su fecha de subida). *Model testing*: precisión 0.98, recall 0.89, F1 0.93. Guardado como versión v7.
-   **Resultado (5 oct):** `00517-18` con v7 → 34 salidas / 31 entradas; con v5 → 19 / 32; *Pseudo* 16 / 30. Entradas robustas; salidas infladas por falsos positivos en 4 puntos fijos del fondo (18 de 26 salidas fugaces). Detalle en el README. Muestras de la 005 reactivadas después.
-   **v8 (5 oct):** v7 + solo los 50 fondos de la 005 (sin sus abejas), 480. *Model testing*: precisión 1.00, recall 0.88, F1 0.94. **Resultado `00517-18` con v8:** 19 salidas / 36 entradas (v7: 34 / 31; *Pseudo*: 16 / 30). Las fotos del fondo bastan para quitar las salidas falsas. **Falta reactivar las 294 + 50 de test de la 005** y volver a dejar el proyecto como la v5.
-3. **Exportar** el modelo int8 como `models/v7_fomo_sin005_480_int8.lite`. No subirlo a git.
-4. **Correr el `00517-18` una sola vez**, con la configuración recomendada y la ROI del paper: `--roi-x 1032 --roi-y 700 --roi-r 180 --track-scale 220 --core 0.7 --static-s 2`. Correr lo mismo con el modelo v5 para comparar en igualdad de condiciones.
-5. **Comparar** los dos contra el *Pseudo* (16 salidas / 30 entradas). Lo que importa es cuánto empeora al quitar la colmena del entrenamiento.
-6. **Si da tiempo,** repetir con la colmena 003 y el `0031-2`.
+El análisis por partes del examen sugiere que no ayuda (agregó 4 salidas falsas a v7). Quitarla es una decisión de desarrollo: la versión sin `--park-s` necesita otro examen a ciegas, con videos del punto 3, antes de poder citarla.
 
-Ojo: la ROI y el core del `00517-18` se eligieron mirando ese video, así que esto mide la generalización del **detector**, no la de los ajustes del conteo.
+### 6. Orden del repo — Claude, cuando Brayan diga
 
-### 2. Preparar la presentación
+- Pasar a `bench/` los scripts de la prueba (detección foto por foto, detecciones de varios modelos, conteo por grupos, manchas inyectadas). Hoy están en `prueba_v7_colmena005.zip` y `segunda_ronda_v7.zip`, en la biblioteca del proyecto, y usan los nombres viejos de los modelos.
+- Quitar del README las comparaciones contra el *Pseudo* como medida principal y dejarlas como dato secundario.
+- Edge Impulse: confirmar que las muestras de la 005 quedaron como se quiere (activadas para la línea v5, desactivadas para la línea v7 y v10).
 
-- **Qué decir:**
-  - entradas: F1 0.84 en el `0040-1`;
-  - salidas: de 0.47 a 0.72, con la causa medida (el despegue se ve 1–2 frames);
-  - en colmenas conocidas, más cerca de la referencia que los trackers del paper.
-- **Límites que hay que decir:**
-  - solo una prueba válida en colmena nueva (`0020-1`), y falló en salidas (43 contra 7);
-  - los ajustes se eligieron con los videos de desarrollo;
-  - el *Pseudo* solo da totales;
-  - los datos son de colmenas de otros investigadores; la colmena final está en Cusco y la cámara aún no se instala.
-- **Cómo contar lo del `0020-1`:** falló, se encontró la causa (sombra), se agregó una regla general (`--static-s`) que bajó a 16 sin empeorar los otros videos, y falta confirmarla en otra colmena nueva.
-- **Fecha:** la presentación al jurado es el 6 de octubre de 2026. No cambiar `main.py` antes de esa fecha.
-- **Después de la presentación:** que `--events` guarde la hora real de cada evento, escriba a disco de inmediato y corte un archivo por día. Hoy `t_s` es relativo al arranque y el archivo se sobrescribe al reiniciar. Lo necesita el proyecto de análisis (`C:\Users\Brayan\Projects\analisis_presentacion_results`), que va separado de este repositorio y lee el CSV de eventos y `/api/status`.
-- **Demo (decidido el 5 oct):** antes de desplegar en Cusco hay que presentar el proyecto a un jurado, y ahora no hay abejas reales.
-  - El conteo se muestra corriendo en la Raspberry Pi con los videos grabados de un minuto. Con un archivo de video se procesan todos los frames, así que el resultado no depende de los FPS de la Pi.
-  - No usar la cámara filmando un celular para contar: el parpadeo, los reflejos y el tamaño cambian los resultados.
-  - La C930e se muestra aparte, unos segundos, solo para ver que captura y detecta. No presentar conteos de esa parte.
-  - La Pi no tiene escritorio (`--show` no funciona): se muestra el dashboard, el video de `--output` copiado al PC o los snapshots. Comandos en `deployment.md`, sección 5.4.
-  - Decir qué videos son de desarrollo (los ajustes se eligieron con el `0040-1`).
+### 7. Cámara con exposición más corta — en espera
 
-### 3. Medir los FPS del modelo 480 en la Raspberry Pi 5
-
-**Primera medición (5 oct):** `0040-1` en la Pi 5 con la configuración recomendada, `--num-threads 4`, `--dashboard` y guardando el video (`--output`): **20.9 FPS**, 03:45 para un minuto de video, 32 entradas / 50 salidas (en el PC: 33 / 47), procesador a ~65 °C. No alcanza los 60 fps del video, pero supera los ~15 fps mínimos. Ese 20.9 era el cálculo viejo (solo detección y tracking).
-
-**Con `--no-output` (5 oct), velocidad real** (frames entre tiempo total, incluye leer el video): **44.8 FPS**, 01:20 para un minuto de video, 32 entradas / 50 salidas. Supera los 30 fps de la C930e. **Con la C930e conectada (5 oct):** 1280×720 a 30 fps, `--no-output`, 1:14 de prueba: **30.0 FPS procesados, tiempo real: sí**. La Pi 5 va al ritmo de la cámara con el modelo 480. Sin abejas delante salieron 17 salidas falsas (fondo desconocido), igual que en las colmenas nuevas: en Cusco calibrar con fotos del fondo. Falta validar la exactitud del conteo a 30 fps (los resultados son con videos a 60 fps).
-
-Si no alcanza el tiempo real, probar el de 320 (`models/v6_fomo_borrosas_320_int8.lite`, si se descargó de la v6).
-
-El resumen final de `main.py` dice cuántas imágenes llegan, cuántas puede analizar el equipo y cuántas analizó, con una nota si no alcanzó el ritmo (explicado en el README, sección del script principal).
-
-### 4. Extraer los despegues reales para reentrenar (opcional)
-
-`--flash-exits` encuentra los despegues, así que se puede usar para sacar esos frames de los 44 videos de la 004 y etiquetarlos. Nunca del `0040-1`.
-
-### 5. Cámara (en espera)
+Si el despegue sale menos borroso, el detector lo ve más cuadros. Solo aplica a la cámara de Cusco. Brayan no puede hacerlo por ahora.
 
 - **C930e en la Pi:** probar exposiciones cortas con `v4l2-ctl` (`deployment.md`, sección 5).
-- **FPS:** la C930e graba a 30 fps; `FlashExits` se ajustó a 60 fps. Revisar `max_hits` y `max_gap_s` con un video de esa cámara.
-- **Cámara fija:** el sistema supone que la piquera no se mueve en la imagen (por eso falló el `0062-2M`).
+- **FPS:** la C930e graba a 30 fps y las reglas se ajustaron a 60 fps. Revisar `max_hits` y `max_gap_s` de `FlashExits` con un video de esa cámara.
+- **Cámara fija:** el sistema supone que la piquera no se mueve en la imagen.
 
-## Cómo probar un video nuevo (sin hacer trampa)
+### 8. Eventos con hora real — después
 
-1. Confirmar que la colmena no está en el entrenamiento.
-2. Sacar frames (inicio, mitad y final) y fijar ROI, `--core` y `--track-scale` **solo mirando la imagen**. Si la resolución es menor, escalar ROI y `--track-scale` en la misma proporción.
-3. Revisar la posición con `--snapshot-every 150 --snapshot-dir snapshots_X`, sin mirar los conteos.
-4. Correr **una sola vez** con `--output` y `--events` y comparar contra el `.txt` del video. Ese es el resultado, aunque salga mal.
+Que `--events` guarde la hora real de cada evento, escriba a disco de inmediato y corte un archivo por día. Lo necesita el proyecto de análisis (`analisis_presentacion_results`).
+
+## Cómo probar sin hacer trampa
+
+1. Las reglas del contador se ajustan solo con videos de desarrollo de las colmenas 001/003/004 (hoy: `0040-1` y `0031-2`). Nunca con videos de examen.
+2. Por video solo se elige la zona de entrada, mirando el primer cuadro, antes de contar.
+3. Se congela la versión (commit) y se corre **una sola vez**. Ese es el resultado, aunque salga mal.
+4. El conteo a mano se hace sin ver lo que contó el programa, y se abre después de correr.
 5. Si después se cambia algo mirando ese video, el resultado nuevo ya es de desarrollo.
-
-Para analizar un video sin volver a correr el modelo: `bench/dump_detections.py` (con el mismo `--roi-x/--roi-y` y `--crop-roi`) y `bench/replay_detections.py`.
+6. No elegir la mejor fila después de ver el examen. El resultado oficial es el de la versión congelada.
+7. Los errores de `0056-7`, `00519-20` y `00523-24` no se revisan uno por uno: así sirven otra vez para examinar un modelo reentrenado.
+8. Siempre comparar contra la columna "F1 azar" de `bench/compare_events.py --tol 0.5 --max-angle 40`.
 
 ## Otros pendientes
 

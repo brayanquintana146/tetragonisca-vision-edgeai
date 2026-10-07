@@ -539,6 +539,9 @@ Para otra colmena hay que ubicar la piquera primero: correr con `--no-output --s
 - `--core`: con `--counter hibrido`, fracción del radio que es la boca de la piquera (p. ej. `0.5`). Una salida solo cuenta si la abeja pasó por ahí, y una entrada solo si llega ahí. Así no cuentan las guardianas que vuelan frente a la piquera y cruzan el borde del círculo. En el `0040-1` con `--flash-exits --cancel-s 1.0`, `--core 0.5` da IN 0.84 y OUT 0.72 (sin él, 0.87 y 0.69). Ver los resultados del `0031-2` en [TRACKING_ALGORITHM.md](docs/TRACKING_ALGORITHM.md).
 - `--flash-exits`: con `--counter hibrido`, cuenta también las salidas que FOMO solo ve en 1–3 frames (despegues borrosos) y deja de proyectar los tracks que se cierran. Estas salidas aparecen en el contador con ~1.5 s de retraso y con ID `-1` en el CSV. Ver [TRACKING_ALGORITHM.md](docs/TRACKING_ALGORITHM.md).
 - `--static-s`: con `--flash-exits`, descarta una salida si en su punto ya había una detección en los N segundos anteriores (recomendado `2`). Una abeja que se va no sale de donde ya había algo quieto: ese punto suele ser una sombra o una abeja parada que FOMO ve a ratos. Ver [TRACKING_ALGORITHM.md](docs/TRACKING_ALGORITHM.md).
+- `--rep-s`: con `--flash-exits`, descarta una salida fugaz que sale de un punto fijo repetido: un sitio del fondo que FOMO confunde con una abeja y que se enciende una y otra vez sin moverse (recomendado `60`). Sirve en una colmena que el modelo no conoce, sin fotos de su fondo. Ver [TRACKING_ALGORITHM.md](docs/TRACKING_ALGORITHM.md).
+- `--in-max-age`, `--in-park-s`: reglas contra las manchas fijas del fondo que FOMO confunde con abejas en una colmena nueva (valores probados: `3` y `0.15`). Quitan entradas falsas: no cuenta un track viejo ni uno que estaba quieto y salta a la piquera. En el examen a ciegas de la colmena 005 quitaron 7 de 9 entradas falsas y 3 de 24 reales. Ver [TRACKING_ALGORITHM.md](docs/TRACKING_ALGORITHM.md).
+- `--park-s`: evita que una mancha quieta tape los despegues cercanos (necesita `--flash-exits`; valor probado: `0.9`). Forma parte de la configuración que dio el examen a ciegas de la colmena 005. El análisis por partes de ese examen sugiere que no ayuda (agregó 4 salidas falsas), pero quitarla es una decisión de desarrollo que necesita otro examen a ciegas.
 - `--events`: CSV con cada evento IN/OUT (tiempo, ID, posición).
 - `--show`: Muestra la ventana visual de OpenCV con rastreos interpolados.
 
@@ -666,5 +669,23 @@ Las entradas casi no cambian (31 contra 32), así que el detector reconoce a las
 **v8: agregar solo fotos del fondo.** Con la v7 más las 50 fotos del fondo de la colmena 005 (ninguna abeja de la 005), las salidas bajan de 34 a 19, igual que la v5 que sí vio sus abejas (*Pseudo*: 16). Las entradas suben de 31 a 36 (*Pseudo*: 30). Esto confirma que las salidas falsas venían del fondo desconocido y que unas pocas fotos del fondo sin abejas bastan para corregirlas.
 
 **Conclusión.** En las dos colmenas nuevas (`0020-1` y la 005 con el modelo v7), las **entradas** quedan cerca de la referencia y las **salidas** se inflan por falsos positivos del detector en puntos fijos del fondo. La v8 lo confirma: al instalar el sistema en una colmena nueva, la calibración debe incluir fotos del fondo de esa piquera sin abejas (clase negativa) y no solo ajustar la ROI.
+
+### Examen a ciegas con v7 en la colmena 005 (7 oct 2026)
+
+Pregunta: ¿cuenta el sistema en una colmena que el modelo nunca vio, sin fotos de su fondo? Protocolo, tablas completas y límites en [`docs/PRUEBA_CIEGA_V7.md`](docs/PRUEBA_CIEGA_V7.md); las reglas nuevas, en [TRACKING_ALGORITHM.md](docs/TRACKING_ALGORITHM.md).
+
+- Las reglas del contador se ajustaron solo con el `0040-1` y el `0031-2` (colmenas 004 y 003, los dos contados a mano). Nunca con videos de la 005 ni de la 002.
+- Examen: videos `0056-7` y `00519-20`, nunca usados, contados a mano (31 entradas y 33 salidas). Reglas congeladas antes de correr (commit `cfe0bdc`), una sola corrida, conteo a mano abierto después.
+- Configuración: la recomendada del 5 oct + `--rep-s 60 --in-max-age 3 --in-park-s 0.15 --park-s 0.9`, con `--roi-r 100 --track-scale 220 --core 0.5` y la zona de entrada elegida del primer cuadro.
+
+| Modelo | Entradas bien / contadas (de 31), F1 | Salidas bien / contadas (de 33), F1 |
+| :--- | :---: | :---: |
+| **v7 (nunca vio la 005, sin fotos del fondo)** | 21 / 23, **0.78** | 20 / 28, **0.66** |
+| v8 (v7 + 50 fotos del fondo) | 24 / 25, 0.86 | 17 / 26, 0.58 |
+| v5 (vio la 005) | 25 / 28, 0.85 | 23 / 27, 0.77 |
+
+El F1 al azar va de 0.01 a 0.28 según el video. Detección foto por foto en la 005 (349 fotos, umbral 0.5): v7 F1 0.70 (recall 0.94, precisión 0.55), v8 0.83, v5 0.92.
+
+**Conclusión actualizada.** v7 cuenta en una colmena nueva sin fotos del fondo, muy por encima del azar, pero por debajo del modelo que la conoce. Las salidas son el punto débil y el límite es el detector: ni v5 encuentra más de 7 de cada 10. v7 también es peor que v5 en la colmena 003, que los dos conocen, así que no toda la diferencia viene de no conocer la 005. Son dos minutos y 64 eventos.
 
 Los siguientes pasos están en [`docs/PENDIENTES.md`](docs/PENDIENTES.md).
