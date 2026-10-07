@@ -22,7 +22,7 @@ pon caja a TODAS las abejas del frame, nítidas y borrosas.
 No uses aquí el video con el que evalúas (0040-1): sus frames contaminarían la medición.
 
 Uso (varios videos a la vez):
-  python scripts/05_extraer_borrosas.py --model models/fomo_nuevo_int8.lite ^
+  python scripts/05_extraer_borrosas.py --model models/v4_fomo_nuevo_int8.lite ^
       --videos C:\\videos_004\\*.mp4 --exclude 0040-1 00427
 """
 import argparse
@@ -54,7 +54,7 @@ def main():
     ap.add_argument("--videos", nargs="+", required=True, help="videos o patrones (p. ej. C:\\videos\\*.mp4)")
     ap.add_argument("--exclude", nargs="*", default=["0040-1"],
                     help="saltar los videos cuyo nombre contenga alguno de estos textos (defecto: 0040-1, el de prueba)")
-    ap.add_argument("--model", default="models/fomo_nuevo_int8.lite")
+    ap.add_argument("--model", default="models/v4_fomo_nuevo_int8.lite")
     ap.add_argument("--out", default="data/borrosas")
     ap.add_argument("--roi-x", type=int, default=900)
     ap.add_argument("--roi-y", type=int, default=600)

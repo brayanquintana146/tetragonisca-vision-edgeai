@@ -42,3 +42,15 @@ bench/cache/
 
 # Frames extraídos para reetiquetar (pesados)
 data/despegues/
+
+# Corridas de prueba locales (eventos, detecciones, frames y snapshots)
+/ev_*.csv
+/eventos*.csv
+/det_*.json.gz
+/detecciones.json.gz
+/frame_*.jpg
+/snapshots*/
+/results_*.csv
+
+# Frames extraídos para reetiquetar (pesados)
+data/borrosas/

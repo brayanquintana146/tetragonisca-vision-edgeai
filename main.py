@@ -73,7 +73,7 @@ class FOMODetector:
     Detector de centroides basado en el modelo FOMO (.lite / .tflite) exportado desde Edge Impulse.
     """
 
-    def __init__(self, model_path="models/fomo_tetragonisca_int8.lite", threshold=0.6, num_threads=1,
+    def __init__(self, model_path="models/v3_fomo_tetragonisca_int8.lite", threshold=0.6, num_threads=1,
                  crop_center=None):
         self.interpreter = tflite.Interpreter(
             model_path=model_path,
@@ -197,7 +197,7 @@ def main():
     parser.add_argument(
         "--model",
         type=str,
-        default="models/fomo_tetragonisca_int8.lite",
+        default="models/v3_fomo_tetragonisca_int8.lite",
         help="Ruta al modelo .lite / .tflite",
     )
     parser.add_argument(

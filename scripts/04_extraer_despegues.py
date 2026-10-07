@@ -44,7 +44,7 @@ def main():
     ap.add_argument("--out", default="data/despegues")
     ap.add_argument("--prefix", default=None, help="prefijo de los archivos (por defecto, nombre del video)")
     ap.add_argument("--no-prelabel", action="store_true", help="no pre-etiquetar con el modelo actual")
-    ap.add_argument("--model", default="models/fomo_tetragonisca_int8.lite")
+    ap.add_argument("--model", default="models/v3_fomo_tetragonisca_int8.lite")
     ap.add_argument("--threshold", type=float, default=0.55)
     ap.add_argument("--box-w", type=int, default=59, help="ancho (px) de las cajas pre-etiquetadas")
     ap.add_argument("--box-h", type=int, default=80, help="alto (px) de las cajas pre-etiquetadas")

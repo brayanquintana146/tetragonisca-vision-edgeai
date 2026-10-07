@@ -71,7 +71,7 @@ def webcam_view(src, rng, s, off, H):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--video', required=True)
-    ap.add_argument('--model', default='models/fomo_tetragonisca_int8.lite')
+    ap.add_argument('--model', default='models/v3_fomo_tetragonisca_int8.lite')
     ap.add_argument('--out', default='cache')
     a = ap.parse_args()
     os.makedirs(a.out, exist_ok=True)

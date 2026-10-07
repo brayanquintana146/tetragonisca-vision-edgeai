@@ -6,7 +6,7 @@ Lo hecho está en el [README](../README.md) (configuración recomendada, validac
 
 ## Estado actual
 
-- **Modelo:** v5, 480×480, con 273 abejas borrosas (`models/fomo_borrosas_480_int8.lite`). *Model testing*: F1 0.94.
+- **Modelo:** v5, 480×480, con 273 abejas borrosas (`models/v5_fomo_borrosas_480_int8.lite`). *Model testing*: F1 0.94.
 - **Configuración recomendada:**
   ```powershell
   --crop-roi --counter hibrido --max-gate 0.9 --max-gate-tentative 1.2 --accel-std 260 --threshold 0.7 --max-lost 0.3 --proj-min-speed 3.0 --flash-exits --static-s 2 --core 0.5 --cancel-s 1.0
@@ -47,7 +47,7 @@ Objetivo: tener una segunda colmena nueva para el modelo, con referencia *Pseudo
 2. **Entrenar** con los mismos ajustes que la v5 (480×480, FOMO). **Hecho (5 oct):** 344 de train y 50 de test desactivadas (294 imágenes `005…` + 50 fondos `bg_unknown` identificados por su fecha de subida). *Model testing*: precisión 0.98, recall 0.89, F1 0.93. Guardado como versión v7.
    **Resultado (5 oct):** `00517-18` con v7 → 34 salidas / 31 entradas; con v5 → 19 / 32; *Pseudo* 16 / 30. Entradas robustas; salidas infladas por falsos positivos en 4 puntos fijos del fondo (18 de 26 salidas fugaces). Detalle en el README. Muestras de la 005 reactivadas después.
    **v8 (5 oct):** v7 + solo los 50 fondos de la 005 (sin sus abejas), 480. *Model testing*: precisión 1.00, recall 0.88, F1 0.94. **Resultado `00517-18` con v8:** 19 salidas / 36 entradas (v7: 34 / 31; *Pseudo*: 16 / 30). Las fotos del fondo bastan para quitar las salidas falsas. **Falta reactivar las 294 + 50 de test de la 005** y volver a dejar el proyecto como la v5.
-3. **Exportar** el modelo int8 como `models/fomo_sin005_480_int8.lite`. No subirlo a git.
+3. **Exportar** el modelo int8 como `models/v7_fomo_sin005_480_int8.lite`. No subirlo a git.
 4. **Correr el `00517-18` una sola vez**, con la configuración recomendada y la ROI del paper: `--roi-x 1032 --roi-y 700 --roi-r 180 --track-scale 220 --core 0.7 --static-s 2`. Correr lo mismo con el modelo v5 para comparar en igualdad de condiciones.
 5. **Comparar** los dos contra el *Pseudo* (16 salidas / 30 entradas). Lo que importa es cuánto empeora al quitar la colmena del entrenamiento.
 6. **Si da tiempo,** repetir con la colmena 003 y el `0031-2`.
@@ -81,7 +81,7 @@ Ojo: la ROI y el core del `00517-18` se eligieron mirando ese video, así que es
 
 **Con `--no-output` (5 oct), velocidad real** (frames entre tiempo total, incluye leer el video): **44.8 FPS**, 01:20 para un minuto de video, 32 entradas / 50 salidas. Supera los 30 fps de la C930e. **Con la C930e conectada (5 oct):** 1280×720 a 30 fps, `--no-output`, 1:14 de prueba: **30.0 FPS procesados, tiempo real: sí**. La Pi 5 va al ritmo de la cámara con el modelo 480. Sin abejas delante salieron 17 salidas falsas (fondo desconocido), igual que en las colmenas nuevas: en Cusco calibrar con fotos del fondo. Falta validar la exactitud del conteo a 30 fps (los resultados son con videos a 60 fps).
 
-Si no alcanza el tiempo real, probar el de 320 (`models/fomo_borrosas_320_int8.lite`, si se descargó de la v6).
+Si no alcanza el tiempo real, probar el de 320 (`models/v6_fomo_borrosas_320_int8.lite`, si se descargó de la v6).
 
 El resumen final de `main.py` dice cuántas imágenes llegan, cuántas puede analizar el equipo y cuántas analizó, con una nota si no alcanzó el ritmo (explicado en el README, sección del script principal).
 

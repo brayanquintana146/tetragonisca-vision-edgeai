@@ -68,7 +68,7 @@ tetragonisca-vision-edgeai/
 │       ├── train/                # Conjunto de entrenamiento con parches de fondo (unknown)
 │       └── test/                 # Conjunto reservado de evaluación (Test set)
 ├── models/                       # Artefactos exportados para inferencia local
-│   ├── fomo_tetragonisca_int8.lite # Modelo TensorFlow Lite cuantizado int8 (~53 KB)
+│   ├── v3_fomo_tetragonisca_int8.lite # Modelo TensorFlow Lite cuantizado int8 (~53 KB)
 │   ├── labels.txt                # Archivo de etiquetas ("Abeja")
 │   └── model_tetragonisca.eim    # Binario ejecutable para Linux AARCH64 (Raspberry Pi 5)
 ├── scripts/                      # Pipeline MLOps de preparación de datos
@@ -352,7 +352,7 @@ En el menú lateral de Edge Impulse Studio, ir a **Impulse Design > Create Impul
 3. Hacer clic en **Build** y descargar el archivo generado.
 4. Reemplazar el archivo anterior en la carpeta `models/` del repositorio:
    ```
-   models/fomo_tetragonisca_int8.lite   ← reemplazar con el archivo descargado
+   models/v3_fomo_tetragonisca_int8.lite   ← reemplazar con el archivo descargado
    ```
 
 #### Modelo `.eim` (Edge Impulse Linux Runner — para Raspberry Pi 5 / Linux AARCH64)
@@ -519,7 +519,7 @@ python main.py --video "examples/videos/0040-1.mp4" --roi-x 900 --roi-y 600 --ro
 **Configuración recomendada (5 oct 2026).** Modelo v5 (480×480) con el contador híbrido y las reglas de salidas fugaces, boca de la piquera y puntos quietos (`--static-s 2`):
 
 ```powershell
-python main.py --video examples/videos/0040-1.mp4 --model models/fomo_borrosas_480_int8.lite --roi-x 900 --roi-y 600 --roi-r 220 --crop-roi --counter hibrido --max-gate 0.9 --max-gate-tentative 1.2 --accel-std 260 --threshold 0.7 --max-lost 0.3 --proj-min-speed 3.0 --flash-exits --static-s 2 --core 0.5 --cancel-s 1.0 --output video_conteo.mp4 --events eventos.csv
+python main.py --video examples/videos/0040-1.mp4 --model models/v5_fomo_borrosas_480_int8.lite --roi-x 900 --roi-y 600 --roi-r 220 --crop-roi --counter hibrido --max-gate 0.9 --max-gate-tentative 1.2 --accel-std 260 --threshold 0.7 --max-lost 0.3 --proj-min-speed 3.0 --flash-exits --static-s 2 --core 0.5 --cancel-s 1.0 --output video_conteo.mp4 --events eventos.csv
 ```
 
 Para otra colmena hay que ubicar la piquera primero: correr con `--no-output --snapshot-every 30` y revisar en `snapshots/` que el círculo caiga sobre la boca de la piquera. Si el círculo tiene que ser más chico que el del `0040-1`, agregar `--track-scale 220` para que el tracker no parta una abeja en dos (ver [Argumentos](#argumentos-de-configuración)).
@@ -574,7 +574,7 @@ python bench/compare_events.py data/gt_0040-1.csv eventos.csv
 - Se usa la medición estricta: `--tol 0.5 --max-angle 40`, es decir, ±0.5 s y del mismo lado de la piquera (±40° alrededor de la ROI).
 
 ```powershell
-python main.py --video examples/videos/0040-1.mp4 --model models/fomo_nuevo_int8.lite --roi-x 900 --roi-y 600 --roi-r 220 --crop-roi --counter hibrido --max-gate 0.6 --max-gate-tentative 1.2 --accel-std 80 --no-output --events eventos.csv
+python main.py --video examples/videos/0040-1.mp4 --model models/v4_fomo_nuevo_int8.lite --roi-x 900 --roi-y 600 --roi-r 220 --crop-roi --counter hibrido --max-gate 0.6 --max-gate-tentative 1.2 --accel-std 80 --no-output --events eventos.csv
 python bench/compare_events.py data/gt_0040-1.csv eventos.csv --start 30 --tol 0.5 --max-angle 40
 ```
 
@@ -595,7 +595,7 @@ python bench/compare_events.py data/gt_0040-1.csv eventos.csv --start 30 --tol 0
 
 | Configuración | Entradas bien / contadas (de 36) | F1 IN (azar) | Salidas bien / contadas (de 78) | F1 OUT (azar) |
 | :--- | :---: | :---: | :---: | :---: |
-| Modelo base (`fomo_tetragonisca`), ajustes del 4 oct | | 0.75 | | 0.44 |
+| Modelo v3 (`v3_fomo_tetragonisca`), ajustes del 4 oct | | 0.75 | | 0.44 |
 | v5, tracker ajustado para 480 | 33 / 40 | 0.87 (0.31) | 37 / 80 | 0.47 (0.27) |
 | + `--flash-exits` | 33 / 40 | 0.87 (0.31) | 48 / 61 | 0.69 (0.39) |
 | + `--core 0.5 --cancel-s 1.0` | 29 / 33 | 0.84 (0.29) | 46 / 49 | **0.72 (0.40)** |
