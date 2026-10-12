@@ -1,280 +1,123 @@
 # tetragonisca-vision-edgeai
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![License: BSD 3-Clause](https://img.shields.io/badge/License-BSD_3--Clause-blue.svg)](LICENSE)
 [![Python 3.8+](https://img.shields.io/badge/Python-3.8%2B-blue.svg)](https://www.python.org/)
 [![Edge Impulse](https://img.shields.io/badge/Platform-Edge%20Impulse-purple.svg)](https://edgeimpulse.com/)
 [![Dataset DOI](https://img.shields.io/badge/Dataset-10.5281%2Fzenodo.10439007-green.svg)](https://zenodo.org/records/10439007)
 
-Sistema de visión artificial en el borde (Edge AI) diseñado para detectar la actividad en la piquera de la abeja nativa sin aguijón Tetragonisca angustula (Jataí/Angelita/Señorita).
+Conteo de entradas y salidas de abejas nativas sin aguijón (*Tetragonisca angustula*: angelita, jataí, señorita) en la piquera de la colmena, con visión artificial en una Raspberry Pi 5 y sin conexión a internet.
 
-Este proyecto usa un proceso reproducible centrado en los datos que limpia, revisa y añade fondos a las imágenes para entrenar la red neuronal FOMO (Faster Objects, More Objects) en dispositivos pequeños y de bajo consumo.
+Un detector FOMO de 54 KB encuentra las abejas en cada imagen. Un algoritmo de seguimiento las sigue de una imagen a la siguiente y cuenta cuántas entran y cuántas salen.
 
----
+## Resultados
 
-## 1. Visión General
+| Qué se midió | Resultado |
+| :--- | :--- |
+| Detección (test de Edge Impulse, modelo v5) | F1 0.94, precisión 1.00, recall 0.89 |
+| Conteo en una colmena conocida (video `0040-1`, contado a mano) | Entradas F1 0.84, salidas F1 0.73 |
+| Conteo en una colmena que el modelo nunca vio, sin fotos de su fondo (prueba a ciegas) | Entradas F1 0.78, salidas F1 0.66 |
+| Velocidad en Raspberry Pi 5 con cámara a 30 fps | 30 imágenes por segundo, en tiempo real |
 
-El monitoreo de la abeja nativa sin aguijón Tetragonisca angustula es clave para la agricultura de precisión y la conservación ecológica. Los sistemas tradicionales basados en la nube o en arquitecturas pesadas (como YOLO estándar) enfrentan colapsos de memoria y dependencia de conectividad constante a internet.
+El conteo se mide evento por evento contra un conteo hecho a mano: cada entrada o salida del programa debe coincidir con una real en el tiempo (±0.5 s) y en el lado de la piquera. Contar al azar da un F1 entre 0.01 y 0.40 en estos videos.
 
-Este repositorio resuelve el problema operando bajo el marco BLERP (Bandwidth, Latency, Economics, Reliability, Privacy):
+El punto débil son las salidas: la abeja que despega aparece borrosa en una o dos imágenes y el detector no siempre la ve. El método, las tablas completas y los límites están en [docs/VALIDACION.md](docs/VALIDACION.md).
 
-- **Ancho de Banda (Bandwidth):** Procesa y analiza las imágenes localmente en el dispositivo sin necesidad de transmitir streaming continuo de video en alta definición hacia servidores externos.
-- **Latencia (Latency):** Ejecuta la inferencia y localización en milisegundos directamente en el hardware embebido, permitiendo una respuesta inmediata en el punto de captura.
-- **Economía (Economics):** Reduce los costos de operación al eliminar la transferencia masiva de datos por red móvil o satelital, así como el pago por consumo de infraestructura de cómputo en la nube.
-- **Fiabilidad (Reliability):** Garantiza un funcionamiento continuo e independiente de forma offline, operando con total autonomía en entornos rurales sin conectividad a internet.
-- **Privacidad (Privacy):** Mantiene los datos procesados localmente dentro del dispositivo, asegurando que la información visual y ambiental de la ubicación no sea expuesta ni transmitida a servidores de terceros.
-
-## 2. Arquitectura del Pipeline MLOps
+## Cómo funciona
 
 ```text
-┌──────────────────────────────────────────────────────────────────┐
-│ 1. ADQUISICIÓN DE DATOS (Data Ingestion):                        │
-│    Dataset Crudo de Zenodo (Colmena 004 - 004.zip)               │
-└────────────────────────────────┬─────────────────────────────────┘
-                                 │
-                                 ▼
-┌──────────────────────────────────────────────────────────────────┐
-│ 2. PROCESAMIENTO DATA-CENTRIC (scripts/preparar_dataset_004.py): │
-│    • Respeta la división nativa: 250 Train / 50 Valid / 50 Test  │
-│    • Audita imágenes y etiquetas YOLO                            │
-│    • Genera e inyecta parches de fondo ("unknown")               │
-└────────────────────────────────┬─────────────────────────────────┘
-                                 │
-                                 ▼
-┌──────────────────────────────────────────────────────────────────┐
-│ 3. CARGA AUTOMATIZADA (Edge Impulse CLI Uploader):               │
-│    Subida de datos etiquetados respetando los Splits             │
-└────────────────────────────────┬─────────────────────────────────┘
-                                 │
-                                 ▼
-┌──────────────────────────────────────────────────────────────────┐
-│ 4. ENTRENAMIENTO Y OPTIMIZACIÓN (Edge Impulse Studio):           │
-│    Modelo FOMO cuantizado en INT8 listo para microcontroladores  │
-└──────────────────────────────────────────────────────────────────┘
+Cámara o video ─► Detector FOMO (480×480, int8) ─► Seguimiento (Kalman + Húngaro) ─► Contador ─► Entradas / Salidas
 ```
 
-## 3. Estructura del Repositorio
+1. **Detección.** El modelo FOMO, entrenado en Edge Impulse, marca el centro de cada abeja.
+2. **Seguimiento.** Cada abeja recibe un identificador que se mantiene mientras se mueve. Las distancias se miden en radios de la piquera y los tiempos en segundos, así que funciona igual con otra resolución o velocidad de cámara.
+3. **Conteo.** Se dibuja un círculo sobre la piquera. Una abeja que cruza hacia dentro es una entrada y una que cruza hacia fuera es una salida. Varias reglas descartan a las guardianas que revolotean, los despegues que solo se ven una imagen y los puntos del fondo que el detector confunde con abejas.
+
+El detalle de cada regla está en [docs/TRACKING_ALGORITHM.md](docs/TRACKING_ALGORITHM.md).
+
+## Uso rápido
+
+```powershell
+git clone https://github.com/brayanquintana146/tetragonisca-vision-edgeai.git
+cd tetragonisca-vision-edgeai
+pip install -r requirements.txt
+```
+
+Contar en un video, con la configuración recomendada:
+
+```powershell
+python main.py --video examples/videos/0040-1.mp4 --model models/v5_fomo_borrosas_480_int8.lite --roi-x 900 --roi-y 600 --roi-r 220 --crop-roi --counter hibrido --max-gate 0.9 --max-gate-tentative 1.2 --accel-std 260 --threshold 0.7 --max-lost 0.3 --proj-min-speed 3.0 --flash-exits --static-s 2 --core 0.5 --cancel-s 1.0 --rep-s 60 --output video_conteo.mp4 --events eventos.csv
+```
+
+Al terminar, la consola muestra las entradas, las salidas y la velocidad. `--output` guarda el video anotado y `--events` un CSV con cada evento (tiempo, tipo y posición).
+
+Opciones principales:
+
+| Opción | Para qué sirve |
+| :--- | :--- |
+| `--video` | Archivo de video, o cámara (`0`, `/dev/video0`) |
+| `--model` | Modelo `.lite` de la carpeta `models/` |
+| `--roi-x`, `--roi-y`, `--roi-r` | Centro y radio, en píxeles, del círculo sobre la piquera |
+| `--crop-roi` | Recorta un cuadrado centrado en la piquera antes del modelo, como en el entrenamiento |
+| `--track-scale` | Tamaño de referencia de la abeja cuando el círculo es chico (por ejemplo `--roi-r 100 --track-scale 220`) |
+| `--dashboard` | Página web con el conteo en vivo, en el puerto 5000 |
+| `--no-output` | No guarda el video anotado (más rápido en la Raspberry Pi) |
+
+`python main.py --help` lista todas las opciones.
+
+**En una colmena nueva** solo hay que ubicar la piquera: correr con `--no-output --snapshot-every 30` y revisar en `snapshots/` que el círculo caiga sobre la boca. Para una colmena que el modelo no conoce se agregan `--in-max-age 3 --in-park-s 0.15 --park-s 0.9`, la configuración evaluada en la prueba a ciegas.
+
+## Modelos
+
+El nombre de cada archivo empieza con su versión en Edge Impulse.
+
+| Versión | Datos de entrenamiento | Entrada | F1 (test) |
+| :--- | :--- | :---: | :---: |
+| v3 | Colmenas 001, 003, 004 y 005 | 320×320 | 0.93 |
+| **v5** | v3 + 273 imágenes de abejas borrosas en vuelo | 480×480 | **0.94** |
+| v7 | v5 sin la colmena 005 (para la prueba a ciegas) | 480×480 | 0.93 |
+
+En el repositorio están la v3 y la v5 (`models/`). El historial completo y la guía para entrenar están en [docs/ENTRENAMIENTO.md](docs/ENTRENAMIENTO.md).
+
+Proyectos públicos en Edge Impulse: [modelo base](https://studio.edgeimpulse.com/studio/1073834) (solo colmena 004) y [modelo multicolmena](https://studio.edgeimpulse.com/studio/1108884).
+
+## Estructura del repositorio
 
 ```text
 tetragonisca-vision-edgeai/
-├── data/
-│   ├── raw/                      # Descarga de datos crudos (Zenodo Colmena 004)
-│   └── processed/                # Datasets procesados unificados para Edge Impulse
-│       ├── train/                # Conjunto de entrenamiento con parches de fondo (unknown)
-│       └── test/                 # Conjunto reservado de evaluación (Test set)
-├── models/                       # Artefactos exportados para inferencia local
-│   ├── fomo_tetragonisca_int8.lite # Modelo TensorFlow Lite cuantizado int8 (~53 KB)
-│   ├── labels.txt                # Archivo de etiquetas ("Abeja")
-│   └── model_tetragonisca.eim    # Binario ejecutable para Linux AARCH64 (Raspberry Pi)
-├── scripts/                      # Pipeline MLOps de preparación de datos
-│   ├── 01_preparar_train.py      # Limpieza de Colmena 004 e inyección de clase negativa
-│   ├── 02_copiar_valid_a_train.py # Unificación del split de validación en train
-│   └── 03_preparar_test.py       # Preparación del conjunto reservado de pruebas
-├── .gitignore                    # Reglas de exclusión para Git (datasets y temporales)
-├── LICENSE                       # Licencia BSD 3-Clause
-└── README.md                     # Portada e instrucciones principales del proyecto
+├── main.py        # Detección + seguimiento + conteo (video o cámara)
+├── src/           # Seguimiento, contador, panel web
+├── models/        # Modelos FOMO exportados (.lite)
+├── bench/         # Evaluación: comparar eventos, guardar y repetir detecciones
+├── tools/         # Anotar a mano entradas y salidas, editar cajas
+├── scripts/       # Preparación de datos para Edge Impulse
+├── data/          # Conteos a mano (gt_*.csv) y datos de entrenamiento
+├── docs/          # Documentación
+└── deployment.md  # Instalación en la Raspberry Pi 5
 ```
 
-## 4. Dataset Crudo y Metadatos Científicos
+## Documentación
 
-El proyecto utiliza el registro científico oficial de *Tetragonisca angustula* publicado por Leocádio et al. (2024):
-
-| Parámetro | Especificación |
+| Documento | Contenido |
 | :--- | :--- |
-| **Fuente Oficial** | Repositorio Zenodo (DOI: [10.5281/zenodo.10439007](https://zenodo.org/records/10439007)) |
-| **Especie** | *Tetragonisca angustula* (Jataí / Angelita / Señorita) |
-| **Subconjunto** | Colmena 004 (Colmena artificial en entorno rural) |
-| **Sensor de Captura** | Cámara SONY HDR-AS20 (1920 × 1080p, 60 fps) |
-| **Anotaciones** | Formato YOLO Bounding Boxes |
-| **Licencia Datos** | Creative Commons Atribución-NoComercial 4.0 (CC BY-NC 4.0) |
+| [docs/VALIDACION.md](docs/VALIDACION.md) | Cómo se midió el conteo, resultados y límites |
+| [docs/TRACKING_ALGORITHM.md](docs/TRACKING_ALGORITHM.md) | Algoritmo de seguimiento y reglas de conteo |
+| [docs/ENTRENAMIENTO.md](docs/ENTRENAMIENTO.md) | Preparar datos, entrenar en Edge Impulse e historial de versiones |
+| [deployment.md](deployment.md) | Instalación y uso en la Raspberry Pi 5 |
+| [docs/PENDIENTES.md](docs/PENDIENTES.md) | Trabajo pendiente |
 
-## 5. Instalación, Configuración y Ejecución
-
-Para replicar el proceso actual de procesamiento local de datos y carga a Edge Impulse Studio, sigue este flujo de trabajo:
-
-### Paso 1: Clonar el repositorio y preparar dependencias
+## Pruebas
 
 ```powershell
-# Clonar el proyecto
-git clone https://github.com/tu-usuario/tetragonisca-vision-edgeai.git
-cd tetragonisca-vision-edgeai
-
-# Instalar librería para manipulación de imágenes
-pip install Pillow
+python test_counter_hybrid.py
+python test_tracker_v2.py
 ```
 
-### Paso 2: Descargar los datos crudos (Colmena 004)
+## Datos
 
-```powershell
-cd data/raw
-curl.exe -L "https://zenodo.org/records/10439007/files/004%20-%20Object%20Detection.zip?download=1" -o "004 - Object Detection.zip"
-Expand-Archive -Path "004 - Object Detection.zip" -DestinationPath "004_Object_Detection_Raw" -Force
-cd ../..
-```
+Se usa el conjunto de datos público de Leocádio et al. ([Zenodo, DOI 10.5281/zenodo.10439007](https://zenodo.org/records/10439007)): videos y fotos etiquetadas de seis colmenas de *Tetragonisca angustula*, grabados con una cámara SONY HDR-AS20 (1920×1080, 60 fps). Licencia de los datos: CC BY-NC 4.0.
 
-### Paso 3: Preparar el conjunto de entrenamiento y balancear la clase negativa
+> Leocádio, R. R. V., Segundo, A. K. R., Pessin, G. *Multiple Object Tracking in Native Bee Hives: A Case Study with Jataí in the Field*. BRACIS 2023. <https://doi.org/10.1007/978-3-031-45392-2_12>
 
-Ejecuta el primer script del pipeline para consolidar la carpeta plana `data/processed/train/`, asignar la etiqueta vacía a la primera imagen alfabética e inyectar 50 parches de madera lisa (clase `unknown`):
+## Licencia
 
-```powershell
-python scripts/01_preparar_train.py
-```
-
-### Paso 4: Anexar los datos de validación al conjunto de entrenamiento
-
-Ejecuta el segundo script para copiar todas las imágenes y etiquetas .txt de la carpeta valid directamente dentro de data/processed/train/ (unificándolas para la estructura plana de Edge Impulse):
-
-```powershell
-python scripts/02_copiar_valid_a_train.py
-```
-
-### Paso 5: Preparar el conjunto reservado de prueba (Test)
-
-Ejecuta el tercer script para copiar las imágenes y etiquetas de prueba a `data/processed/test/`:
-
-```powershell
-python scripts/03_preparar_test.py
-```
-
-### Paso 6: Crear el proyecto en Edge Impulse y cargar los datos con la CLI
-
-1. **Iniciar sesión** en [Edge Impulse Studio](https://studio.edgeimpulse.com/) y seleccionar **Create new project**.
-2. Ir a **Dashboard** > **Keys** y copiar la **API Key** de tu proyecto.
-3. **Subir las imágenes de entrenamiento (`train`)** desde la terminal con la CLI oficial:
-   ```powershell
-   edge-impulse-uploader --api-key TU_API_KEY --category training --directory data/processed/train --dataset-format yolo-txt
-   ```
-4. Subir las imágenes reservadas de prueba (test):
-5. Verificar etiquetas en Edge Impulse Studio:
-   - Comprobar en la plataforma que tanto las imágenes de Training como las de Test conserven sus etiquetas correctamente.
-   - Excepción esperada: Los 50 parches de madera lisa y la foto de muestra de la piquera limpia en Training no tendrán etiquetas de abejas por pertenecer a la clase negativa (`unknown`).
-   - Corrección manual (si se requieren re-subidas):
-     - Si alguna imagen pierde su etiqueta, eliminarla manualmente desde la interfaz gráfica de Edge Impulse.
-     - Crear una carpeta auxiliar temporal que contenga las imágenes a corregir, sus archivos `.txt` de etiquetas y el archivo `classes.txt` con el texto `Abeja`.
-6. Re-subida manual desde la interfaz web (sin CLI):
-   - En el menú lateral, ir a Data acquisition > Upload data.
-   - En Upload mode, seleccionar "Select individual files" y elegir los archivos de la carpeta auxiliar.
-   - En Image label format, seleccionar "YOLO TXT".
-   - En Upload into category, seleccionar la categoría correspondiente ("Training" o "Testing").
-
-## 6. Configuración del Impulso
-
-Una vez cargadas y verificadas todas las muestras en **Data acquisition**, el siguiente paso es diseñar el pipeline de procesamiento de señal (DSP) y aprendizaje profundo (Learning Block) dentro de Edge Impulse Studio:
-
-### Paso 1: Configurar el Impulso (Create Impulse)
-
-En el menú lateral, ir a **Impulse Design** > **Create Impulse** y definir los siguientes bloques:
-
-1. **Image Data (Input Block):**
-   - **Image width:** `320` px
-   - **Image height:** `320` px
-   - **Resize mode:** `Fit shortest axis` (mantiene la relación de aspecto recortando el eje más corto).
-2. **Processing Block:**
-   - Seleccionar **Image** (profundidad de color **RGB**).
-3. **Learning Block:**
-   - Seleccionar **Object Detection (FOMO)** (diseñado para estimar centroides de objetos pequeños en dispositivos restringidos).
-4. Guardar la configuración haciendo clic en **Save Impulse**.
-
-### Paso 2: Generación de Características (Image DSP)
-
-1. En el menú lateral, ingresar al submenú **Image**.
-2. En la pestaña **Parameters**, verificar que la profundidad de color sea **RGB** y seleccionar **Save parameters**.
-3. Pasar a la pestaña **Generate features** y hacer clic en el botón **Generate features**.
-4. Inspeccionar la proyección en 2D (**Feature explorer**) para verificar la separabilidad espacial de las muestras.
-
-### Paso 3: Entrenamiento del Modelo de Detección (FOMO)
-
-1. En el menú lateral, ingresar al submenú **Object Detection**.
-2. Configurar los parámetros de **Training settings**:
-   - **Number of training cycles (Epochs):** `100`
-   - **Learning rate:** `0.0015`
-   - **Training processor:** `GPU`
-   - Marcamos **Data augmentation**
-3. Configurar los parámetros de **Advanced training settings**:
-   - **Validation set size:** `20`
-   - **Batch size:** `32`
-   - Marcamos **Profile int8 model**
-4. Verificamos que la **Neural network architecture** sea `MobileNetV2 0.35` (o la variante recomendada por el EON Tuner).
-5. Hacer clic en **Start training**.
-6. Una vez finalizado el entrenamiento, revisar la matriz de confusión (**Confusion matrix**) y las métricas de rendimiento (F1-Score y precisión en el conjunto de validación).
-
-## 7. Resultados y Métricas de Entrenamiento (Training Output - Validation Set)
-
-El rendimiento del modelo FOMO se evaluó en la fase de entrenamiento utilizando el conjunto de validación de Edge Impulse Studio (20% de los datos de entrenamiento):
-
-### Matriz de Confusión (Validation Set)
-
-| Clase Real \ Predicción | Background (Fondo) | Abeja | F1-Score |
-| :--- | :---: | :---: | :---: |
-| **Background (Fondo)** | **100.0%** | **0.0%** | **1.00** |
-| **Abeja** | **12.8%** | **87.2%** | **0.93** |
-
-### Resumen de Métricas de Entrenamiento (Validation Set)
-
-| Métrica | Valor | Descripción |
-| :--- | :---: | :--- |
-| **Precision (Abeja)** | **1.00 (100%)** | Cero falsos positivos: todas las detecciones registradas como abejas fueron correctas. |
-| **Recall (Abeja)** | **0.87 (87.2%)** | Capacidad de captura de abejas presentes (12.8% de falsos negativos por oclusión o ángulo). |
-| **F1-Score (Abeja)** | **0.93 (93.0%)** | Balance armónico general entre Precisión y Sensibilidad. |
-| **F1-Score (Fondo)** | **1.00 (100%)** | Discriminación perfecta de la textura de madera lisa sin abejas (`unknown`). |
-
-### Análisis Técnico del Entrenamiento
-
-1. **Eliminación Total de Falsos Positivos (Precision = 1.00):**
-   - La inyección de los 50 parches de madera lisa con etiquetas vacías (*Data-Centric AI*) enseñó exitosamente a la red neuronal a ignorar las vetas y texturas de la piquera.
-2. **Sensibilidad y Oclusiones (Recall = 0.87):**
-   - El 12.8% de falsos negativos responde a abejas que ingresaron en ángulos complejos o en bordes de la celda de salida de FOMO, un margen sumamente aceptable para muestreo temporal en microcontroladores de bajos recursos.
-
-## 8. Resultados y Métricas de Evaluación Final (Model Testing Output - Test Set)
-
-Posteriormente, se ejecutó una evaluación masiva en la pestaña **Model testing** (*Classify all*) sobre el conjunto reservado de prueba (*Testing set*), el cual contiene imágenes que el modelo **nunca vio durante el entrenamiento**:
-
-### Resumen General del Modelo (Test Set)
-
-- **Accuracy General:** **100.00%**
-
-### Resumen de Métricas de Detección de Objetos (Test Set)
-
-| Métrica | Valor | Porcentaje | Descripción |
-| :--- | :---: | :---: | :--- |
-| **Precision (non-background)** | **1.00** | **100.0%** | Mantiene la ausencia total de falsos positivos en datos no vistos. |
-| **Recall (non-background)** | **0.90** | **90.0%** | Incremento en la sensibilidad: detecta el 90% de las abejas presentes. |
-| **F1 Score (non-background)** | **0.95** | **95.0%** | Desempeño global sobresaliente en el conjunto de evaluación reservado. |
-
-### Análisis Técnico del Desempeño en Pruebas (*Testing*)
-
-1. **Alta Capacidad de Generalización:**
-   - La precisión perfecta de **1.00** y el incremento del **Recall** de **0.87 a 0.90** en datos no vistos demuestran que el modelo no sufrió de sobreajuste (*overfitting*) y generaliza de manera robusta en escenarios reales.
-2. **Validación del Enfoque Data-Centric:**
-   - El F1-Score final de **0.95** en la fase de testing confirma que el balanceo del dataset y la inyección de parches de fondo generaron una red neuronal sumamente confiable para su despliegue local en dispositivos Edge AI.
-
-## 9. Ejecución Local y Monitoreo en Tiempo Real
-
-El pipeline de inferencia y conteo local utiliza el modelo exportado TFLite para realizar predicciones directamente sobre fuentes de video en dispositivos locales, aplicando un sistema avanzado de **Seguimiento (Tracker)** y **Conteo basado en Región de Interés (ROI)**.
-
-Para la documentación matemática completa del Algoritmo Húngaro, los bloqueos oscilatorios y el conteo inferido por velocidad que operan detrás de este pipeline, consulta el archivo técnico:
-👉 **[Documentación del Algoritmo de Seguimiento](docs/TRACKING_ALGORITHM.md)**
-
-### Uso del Pipeline de Inferencia
-
-El script `main.py` levanta el modelo FOMO, establece la circunferencia virtual de la piquera, asocia las abejas con identificadores únicos y despliega un panel de información en vivo (HUD) con el conteo de eventos de **Entrada (IN)**, **Salida (OUT)** y el total histórico de abejas.
-
-```powershell
-python main.py --video "examples/videos/0040-1.mp4" --roi-x 900 --roi-y 600 --roi-r 220 --show
-```
-
-### Argumentos de Configuración:
-- `--video`: Ruta al archivo de video o cámara en vivo.
-- `--roi-x`, `--roi-y`: Coordenadas del centro geográfico de la piquera.
-- `--roi-r`: Radio en píxeles del círculo de conteo.
-- `--threshold`: Umbral de confianza mínimo de la IA (por defecto `0.55`).
-- `--show`: Muestra la ventana visual de OpenCV con rastreos interpolados.
-
-### Precisión del Algoritmo (Prueba de Rendimiento)
-Las calibraciones realizadas sobre secuencias biológicas reales confirmadas de forma manual por investigadores han arrojado los siguientes promedios de exactitud en situaciones de vuelo de alto tránsito:
-- **Entradas (IN):** ~90% de exactitud (Bloqueo efectivo de falsos positivos en el tubo).
-- **Salidas (OUT):** ~85% de exactitud (Restaurado por vectores de cinemática predictiva).
-- **Conteo Acumulado:** Seguimiento robusto de identidades únicas manteniendo el historial de la colonia.
-
-> [!NOTE]
-> **Validación Científica:** Según la investigación de Brasil *"Multiple Object Tracking in Native Bee Hives - Jataí"*, al aplicar su Filtro de Remoción de Duplicados (RD), el conteo biológico real es de **156 abejas totales, 42 entradas y 42 salidas**. Sin aplicar filtros (conteo bruto), los resultados biológicos arrojan 156 totales, 42 entradas y **85 salidas**. 
-> Estos datos de campo se encuentran registrados oficialmente en el archivo `0040-1.txt` del dataset `004 - MOT`, del cual extrajimos el video de prueba original (`0040-1.mp4`). Los resultados de nuestro modelo adaptativo local (~38 IN, ~48 OUT, ~175 TOTAL) se alinean excelentemente con los resultados filtrados oficiales, logrando resolver las oscilaciones con un mínimo costo de cómputo en hardware limitado.
+Código bajo licencia [BSD 3-Clause](LICENSE).
