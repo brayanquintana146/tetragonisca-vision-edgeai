@@ -160,7 +160,7 @@ Con 4 manchas inyectadas en el `0040-1` (v7; sin manchas hay 7 entradas falsas y
 
 ### Examen a ciegas en la colmena 005 (7 oct 2026)
 
-Videos `0056-7` y `00519-20`, nunca usados antes, contados a mano por Brayan (31 entradas y 33 salidas en total). Las reglas se congelaron en el commit `cfe0bdc` antes de correr; se corrió una sola vez y el conteo a mano se abrió después. Zona de entrada elegida del primer cuadro (`--roi-r 100 --track-scale 220 --core 0.5`). Medición estricta, los dos videos sumados. Cada celda es bien / contadas y F1. El F1 al azar va de 0.01 a 0.28 según el video.
+Videos `0056-7` y `00519-20`, nunca usados antes, contados a mano (31 entradas y 33 salidas en total). Las reglas se congelaron en el commit `cfe0bdc` antes de correr; se corrió una sola vez y el conteo a mano se abrió después. Zona de entrada elegida del primer cuadro (`--roi-r 100 --track-scale 220 --core 0.5`). Medición estricta, los dos videos sumados. Cada celda es bien / contadas y F1. El F1 al azar va de 0.01 a 0.28 según el video.
 
 **Resultado oficial** (la configuración congelada: recomendada del 5 oct + `--rep-s 60 --in-max-age 3 --in-park-s 0.15 --park-s 0.9`):
 
