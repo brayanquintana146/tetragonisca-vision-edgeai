@@ -80,6 +80,9 @@ def main():
     ap.add_argument("--box-h", type=int, default=80, help="alto (px) de las cajas pre-etiquetadas")
     ap.add_argument("--roi-file", default=None,
                     help="CSV con video, roi_x, roi_y (y uso=apartado para saltarlo), si la cámara se movió")
+    ap.add_argument("--min-dist", type=int, default=0,
+                    help="ignorar el movimiento a menos de estos px del centro de la piquera: ahí suelen ser "
+                         "abejas apretadas entrando, no abejas en vuelo (p. ej. 150 en la colmena 001)")
     ap.add_argument("--crop-size", type=int, default=None,
                     help="lado del recorte en px (defecto: lado corto del frame). 720 para la colmena 001")
     a = ap.parse_args()
@@ -137,7 +140,7 @@ def main():
             if side is None:
                 x0, y0, side, _ = detector.crop_box(frame.shape[1], frame.shape[0])
             # cerca de la piquera y dentro del recorte que se guarda
-            blobs = [b for b in blobs if math.hypot(b[0] - rx, b[1] - ry) <= a.zone * a.roi_r
+            blobs = [b for b in blobs if a.min_dist <= math.hypot(b[0] - rx, b[1] - ry) <= a.zone * a.roi_r
                      and x0 <= b[0] < x0 + side and y0 <= b[1] < y0 + side]
             if not blobs:
                 continue
