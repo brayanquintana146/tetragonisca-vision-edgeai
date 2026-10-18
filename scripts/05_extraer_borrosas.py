@@ -24,8 +24,16 @@ No uses aquí el video con el que evalúas (0040-1): sus frames contaminarían l
 Uso (varios videos a la vez):
   python scripts/05_extraer_borrosas.py --model models/v4_fomo_nuevo_int8.lite ^
       --videos C:\\videos_004\\*.mp4 --exclude 0040-1 00427
+
+Si la cámara se movió entre videos, --roi-file da la piquera de cada uno (CSV con columnas
+video, roi_x, roi_y; los videos con uso=apartado se saltan). Si las fotos de esa colmena se
+recortaron antes de subirlas a Edge Impulse, --crop-size usa el mismo aumento (720 en la
+colmena 001) y las cajas pre-etiquetadas se achican en la misma proporción:
+  python scripts/05_extraer_borrosas.py --model models/v7_fomo_sin005_480_int8.lite ^
+      --videos "C:\\...\\001 - MOT\\*.mp4" --roi-file data/rois_001.csv --crop-size 720 --out data/borrosas_001
 """
 import argparse
+import csv
 import glob
 import math
 import os
@@ -70,14 +78,27 @@ def main():
     ap.add_argument("--max-per-video", type=int, default=40)
     ap.add_argument("--box-w", type=int, default=59, help="ancho (px) de las cajas pre-etiquetadas")
     ap.add_argument("--box-h", type=int, default=80, help="alto (px) de las cajas pre-etiquetadas")
+    ap.add_argument("--roi-file", default=None,
+                    help="CSV con video, roi_x, roi_y (y uso=apartado para saltarlo), si la cámara se movió")
+    ap.add_argument("--crop-size", type=int, default=None,
+                    help="lado del recorte en px (defecto: lado corto del frame). 720 para la colmena 001")
     a = ap.parse_args()
 
+    rois, apartados = {}, set()
+    if a.roi_file:
+        with open(a.roi_file, newline="", encoding="utf-8") as f:
+            for r in csv.DictReader(f):
+                rois[r["video"]] = (int(r["roi_x"]), int(r["roi_y"]))
+                if (r.get("uso") or "").strip() == "apartado":
+                    apartados.add(r["video"])
+
     paths = sorted({p for pat in a.videos for p in (glob.glob(pat) or [pat])})
-    skipped = [p for p in paths if any(x in os.path.basename(p) for x in a.exclude)]
+    skipped = [p for p in paths if any(x in os.path.basename(p) for x in a.exclude)
+               or os.path.splitext(os.path.basename(p))[0] in apartados]
     paths = [p for p in paths if p not in skipped]
     print(f"Videos a procesar: {len(paths)} | excluidos: {', '.join(os.path.basename(p) for p in skipped) or 'ninguno'}")
     detector = FOMODetector(model_path=a.model, threshold=a.assoc_threshold, num_threads=4,
-                            crop_center=(a.roi_x, a.roi_y))
+                            crop_center=(a.roi_x, a.roi_y), crop_size=a.crop_size)
     d_train = os.path.join(a.out, "train")
     d_ref = os.path.join(a.out, "referencia")
     os.makedirs(d_train, exist_ok=True)
@@ -93,6 +114,13 @@ def main():
             print(f"[AVISO] No se pudo abrir {path}")
             continue
         prefix = os.path.splitext(os.path.basename(path))[0]
+        if a.roi_file and prefix not in rois:
+            print(f"[AVISO] {prefix} no está en {a.roi_file}: se salta")
+            cap.release()
+            continue
+        rx, ry = rois.get(prefix, (a.roi_x, a.roi_y))
+        detector.crop_center = (rx, ry)
+        x0 = y0 = side = None
         prev, last_saved, saved, k = None, -10 ** 9, 0, -1
         while saved < a.max_per_video:
             ok, frame = cap.read()
@@ -106,7 +134,11 @@ def main():
             blobs = [(2 * x, 2 * y, 4 * ar) for x, y, ar in
                      motion_blobs(prev, gray, a.diff_thr, a.min_area / 4, a.max_area / 4)]
             prev = gray
-            blobs = [b for b in blobs if math.hypot(b[0] - a.roi_x, b[1] - a.roi_y) <= a.zone * a.roi_r]
+            if side is None:
+                x0, y0, side, _ = detector.crop_box(frame.shape[1], frame.shape[0])
+            # cerca de la piquera y dentro del recorte que se guarda
+            blobs = [b for b in blobs if math.hypot(b[0] - rx, b[1] - ry) <= a.zone * a.roi_r
+                     and x0 <= b[0] < x0 + side and y0 <= b[1] < y0 + side]
             if not blobs:
                 continue
             raw = detector.detect_raw(frame)
@@ -116,18 +148,19 @@ def main():
                 continue
 
             # Recorte cuadrado centrado en la ROI (lo mismo que ve el modelo con --crop-roi)
-            x0, y0, side, _ = detector.crop_box(frame.shape[1], frame.shape[0])
             crop = frame[y0:y0 + side, x0:x0 + side]
             name = f"{prefix}_f{k:05d}"
             cv2.imwrite(os.path.join(d_train, name + ".png"), crop)
 
             lines, ref = [], crop.copy()
+            # cajas con la misma proporción del recorte que en un recorte de 1080 px
+            bw, bh = a.box_w * side / 1080, a.box_h * side / 1080
             for cx, cy, *_ in cluster_centroids([d for d in raw if d[2] >= 0.55], merge_radius=0.25 * a.roi_r):
                 lx, ly = cx - x0, cy - y0
                 if 0 <= lx < side and 0 <= ly < side:
-                    lines.append(f"0 {lx / side:.6f} {ly / side:.6f} {a.box_w / side:.6f} {a.box_h / side:.6f}")
-                    cv2.rectangle(ref, (int(lx - a.box_w / 2), int(ly - a.box_h / 2)),
-                                  (int(lx + a.box_w / 2), int(ly + a.box_h / 2)), (0, 255, 0), 2)
+                    lines.append(f"0 {lx / side:.6f} {ly / side:.6f} {bw / side:.6f} {bh / side:.6f}")
+                    cv2.rectangle(ref, (int(lx - bw / 2), int(ly - bh / 2)),
+                                  (int(lx + bw / 2), int(ly + bh / 2)), (0, 255, 0), 2)
             with open(os.path.join(d_train, name + ".txt"), "w", encoding="utf-8") as f:
                 f.write("\n".join(lines) + ("\n" if lines else ""))
             for bx, by, _ in unseen:

@@ -74,7 +74,7 @@ class FOMODetector:
     """
 
     def __init__(self, model_path="models/v3_fomo_tetragonisca_int8.lite", threshold=0.6, num_threads=1,
-                 crop_center=None):
+                 crop_center=None, crop_size=None):
         self.interpreter = tflite.Interpreter(
             model_path=model_path,
             num_threads=num_threads,   # multi-core en Pi 5: usar 4
@@ -91,12 +91,15 @@ class FOMODetector:
         # Si se define, se recorta un cuadrado del lado corto del frame centrado aquí (x, y),
         # igual que "Fit shortest axis" de Edge Impulse, en vez de aplastar el frame completo
         self.crop_center = crop_center
+        # Lado del recorte en px (defecto: el lado corto del frame). Más chico = abejas más grandes
+        # para el modelo; p. ej. 720 en la colmena 001, cuyas fotos se recortaron a 1280x720.
+        self.crop_size = crop_size
 
     def crop_box(self, frame_w, frame_h):
         """Región (x0, y0, ancho, alto) del frame que entra al modelo."""
         if self.crop_center is None:
             return 0, 0, frame_w, frame_h
-        side = min(frame_w, frame_h)
+        side = min(frame_w, frame_h, self.crop_size or frame_w)
         x0 = int(np.clip(self.crop_center[0] - side // 2, 0, frame_w - side))
         y0 = int(np.clip(self.crop_center[1] - side // 2, 0, frame_h - side))
         return x0, y0, side, side
