@@ -428,10 +428,11 @@ def main():
             else:
                 counts = counter.update(active, finished)
             objects = {tr.id: tr.pos for tr in active if tr.misses <= 2}
-            if events_writer is not None:
+            if events_writer is not None and len(counter.events) > n_events_written:
                 for ev in counter.events[n_events_written:]:
                     events_writer.writerow([round(ev[0], 3), ev[1], ev[2], int(ev[3]), int(ev[4])])
                 n_events_written = len(counter.events)
+                events_file.flush()   # que un corte de luz no borre los eventos ya contados
         else:
             # 1. Inferencia real con FOMO
             centroids = detector.detect(frame)
