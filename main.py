@@ -149,45 +149,8 @@ class FOMODetector:
 
     @staticmethod
     def _cluster_centroids(raw_centroids, merge_radius=60):
-        """
-        Agrupa centroides que están a menos de merge_radius píxeles entre sí.
-        Devuelve el centroide promedio ponderado por confianza de cada grupo.
-        Esto evita que una sola abeja genere 2-3 detecciones en celdas adyacentes.
-        """
-        if not raw_centroids:
-            return []
-
-        # Ordenar por confianza descendente (los más fuertes anclan los clusters)
-        raw_centroids.sort(key=lambda c: c[2], reverse=True)
-
-        merged = []
-        used = [False] * len(raw_centroids)
-
-        for i in range(len(raw_centroids)):
-            if used[i]:
-                continue
-
-            cx_sum = raw_centroids[i][0] * raw_centroids[i][2]
-            cy_sum = raw_centroids[i][1] * raw_centroids[i][2]
-            weight_sum = raw_centroids[i][2]
-            used[i] = True
-
-            # Absorber todos los vecinos cercanos
-            for j in range(i + 1, len(raw_centroids)):
-                if used[j]:
-                    continue
-                dx = raw_centroids[i][0] - raw_centroids[j][0]
-                dy = raw_centroids[i][1] - raw_centroids[j][1]
-                if (dx * dx + dy * dy) <= merge_radius * merge_radius:
-                    cx_sum += raw_centroids[j][0] * raw_centroids[j][2]
-                    cy_sum += raw_centroids[j][1] * raw_centroids[j][2]
-                    weight_sum += raw_centroids[j][2]
-                    used[j] = True
-
-            # Centroide promedio ponderado del cluster
-            merged.append((int(cx_sum / weight_sum), int(cy_sum / weight_sum)))
-
-        return merged
+        """Agrupación v1: la de src.detection, devuelta como (x, y) enteros."""
+        return [(int(x), int(y)) for x, y, _ in cluster_centroids(raw_centroids, merge_radius)]
 
 
 def main():
