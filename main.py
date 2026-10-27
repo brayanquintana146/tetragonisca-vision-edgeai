@@ -409,7 +409,6 @@ def main():
     frame_idx = 0
     processed_frames = 0
     total_processing_time = 0.0
-    t_last = time.perf_counter()
     global_start_time = time.time()
     t_first = None   # hora del primer frame: no cuenta el arranque de la cámara
 
@@ -618,7 +617,6 @@ def main():
                 break
 
     t_last_frame = time.time()
-    cam_frames = reader.seq if reader is not None else 0
     if reader is not None:
         reader.stop()
 
