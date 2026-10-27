@@ -289,8 +289,18 @@ def main():
     # La ROI tiene que caber completa en el frame; si no, el conteo falla en silencio
     if (args.roi_x - args.roi_r < 0 or args.roi_y - args.roi_r < 0
             or args.roi_x + args.roi_r > width or args.roi_y + args.roi_r > height):
+        lados = [n for n, fuera in (("la izquierda", args.roi_x - args.roi_r < 0),
+                                    ("la derecha", args.roi_x + args.roi_r > width),
+                                    ("arriba", args.roi_y - args.roi_r < 0),
+                                    ("abajo", args.roi_y + args.roi_r > height)) if fuera]
+        lados = " y por ".join(lados)
+        if 2 * args.roi_r > min(width, height):
+            rango = f"El radio no cabe: con este frame, --roi-r puede ser hasta {min(width, height) // 2}."
+        else:
+            rango = (f"Con r={args.roi_r}, --roi-x va de {args.roi_r} a {width - args.roi_r} "
+                     f"y --roi-y de {args.roi_r} a {height - args.roi_r}.")
         print(f"[AVISO] La ROI (centro=({args.roi_x},{args.roi_y}), r={args.roi_r}) se sale del "
-              f"frame {width}x{height}. Revisa --roi-x/--roi-y/--roi-r para esta resolución.")
+              f"frame {width}x{height} por {lados}. {rango}")
 
     if is_camera and args.skip_frames > 1:
         print("[AVISO] --skip-frames con cámara en vivo reduce los FPS efectivos del tracker. "
