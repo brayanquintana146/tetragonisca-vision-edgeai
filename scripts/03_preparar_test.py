@@ -11,8 +11,6 @@ Propósito:
   - Copia las imágenes y etiquetas directamente a 'data/processed/test/'.
 """
 
-import os
-import sys
 import shutil
 from pathlib import Path
 

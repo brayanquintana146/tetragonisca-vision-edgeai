@@ -10,8 +10,6 @@ Propósito:
   - Conserva todas las imágenes y parches previamente procesados en 'data/processed/train/'.
 """
 
-import os
-import sys
 import shutil
 from pathlib import Path
 

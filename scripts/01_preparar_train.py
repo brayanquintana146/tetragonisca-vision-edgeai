@@ -1,11 +1,4 @@
 #!/usr/bin/env python3
-
-
-
-
-
-
-
 # -*- coding: utf-8 -*-
 """
 Script 1: Preparar Train y Balanceo de Fondo (50 Parches)
@@ -16,7 +9,6 @@ Script 1: Preparar Train y Balanceo de Fondo (50 Parches)
 4. Genera 50 parches de 320x320 px a partir de esa primera imagen y les asigna etiquetas .txt VACÍAS.
 """
 
-import os
 import sys
 import shutil
 import random
