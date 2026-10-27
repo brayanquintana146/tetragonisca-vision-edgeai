@@ -68,7 +68,7 @@ def preparar_test():
         elif not label_path.exists():
             posibles = list(RAW_DIR.rglob(txt_name))
             if posibles:
-                label_path = posibles
+                label_path = posibles[0]
 
         dest_label = PROCESSED_TEST_DIR / txt_name
         if label_path.exists():
