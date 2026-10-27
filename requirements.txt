@@ -1,4 +1,14 @@
+# Dependencias para PC (desarrollo, banco de pruebas y scripts de datos)
+# Raspberry Pi: usar requirements-pi.txt
 opencv-python>=4.8.0
 numpy>=1.23.0
 scipy>=1.10.0
-edge-impulse-linux>=1.0.0
+flask>=3.0.0          # dashboard web (--dashboard)
+Pillow>=10.0.0        # scripts/01_preparar_train.py
+
+# Inferencia de modelos .lite: main.py prueba en este orden
+# ai-edge-litert -> tflite-runtime -> tensorflow.
+# Linux/macOS:
+ai-edge-litert>=1.0.0; platform_system != "Windows"
+# Windows (no hay ruedas de LiteRT):
+tensorflow>=2.14.0; platform_system == "Windows"
