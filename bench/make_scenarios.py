@@ -15,19 +15,12 @@ import argparse, os, sys
 import cv2, numpy as np
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try:
-    try:
     import ai_edge_litert.interpreter as tflite
 except ImportError:
     try:
         import tflite_runtime.interpreter as tflite
     except ImportError:
         import tensorflow as _tf   # Windows: no hay ruedas de LiteRT
-        tflite = _tf.lite
-except ImportError:
-    try:
-        import tflite_runtime.interpreter as tflite
-    except ImportError:
-        import tensorflow as _tf   # Windows/PC
         tflite = _tf.lite
 
 ROI_1080 = (900, 600, 220)

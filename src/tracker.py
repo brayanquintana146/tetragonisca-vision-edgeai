@@ -263,7 +263,6 @@ class BeeTracker:
         self.tracks = OrderedDict()   # {id: Track}
         self.next_id = 0              # IDs internos (incluye tentativos)
         self.confirmed_total = 0      # abejas únicas confirmadas
-        self._next_public_id = 0
         self.t_prev = None
 
     # ------------------------------------------------------------------ Kalman
