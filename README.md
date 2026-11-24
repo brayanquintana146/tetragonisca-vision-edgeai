@@ -99,6 +99,7 @@ tetragonisca-vision-edgeai/
 
 | Documento | Contenido |
 | :--- | :--- |
+| [docs/GUIA_PARAMETROS.md](docs/GUIA_PARAMETROS.md) | Cómo correr el conteo y qué hace cada parámetro, en palabras simples |
 | [docs/VALIDACION.md](docs/VALIDACION.md) | Cómo se midió el conteo, resultados y límites |
 | [docs/TRACKING_ALGORITHM.md](docs/TRACKING_ALGORITHM.md) | Algoritmo de seguimiento y reglas de conteo |
 | [docs/ENTRENAMIENTO.md](docs/ENTRENAMIENTO.md) | Preparar datos, entrenar en Edge Impulse e historial de versiones |
