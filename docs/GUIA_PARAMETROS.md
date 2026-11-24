@@ -2,7 +2,7 @@
 
 Esta guía explica cómo correr `main.py` en los casos más comunes y qué hace cada parámetro, en palabras simples. Para el detalle técnico y los números de cada regla, ver [TRACKING_ALGORITHM.md](TRACKING_ALGORITHM.md). Para cómo se midieron los resultados, ver [VALIDACION.md](VALIDACION.md).
 
-## 1. La idea en 30 segundos
+## 1. La idea general
 
 En cada imagen del video pasan cuatro cosas, en este orden:
 
