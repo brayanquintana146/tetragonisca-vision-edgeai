@@ -33,7 +33,7 @@ python main.py --video examples/videos/0040-1.mp4 --model models/v5_fomo_borrosa
 
 Resultado esperado: 32 entradas y 44 salidas. `--show` abre una ventana con el video a su velocidad real; se cierra con la tecla `q`.
 
-Para guardar el video anotado, cambiar `--no-output` por `--output video_conteo.mp4`. Guardar video cuesta tiempo: en un PC de 4 núcleos el análisis baja de ~140 a ~40 imágenes por segundo, y la ventana se ve más lenta que el video real.
+Para guardar el video anotado, cambiar `--no-output` por `--output video_conteo.mp4`. Guardar video cuesta tiempo: en las pruebas el análisis bajó a menos de la mitad de velocidad, y la ventana puede verse más lenta que el video real.
 
 ### b) Colmena que el modelo nunca vio
 
