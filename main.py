@@ -425,6 +425,7 @@ def main():
     t_first = None   # hora del primer frame: no cuenta el arranque de la cámara
 
     t_show0 = None   # con --show y video de archivo: hora en que "empezó" la reproducción
+    t_last_show = 0.0   # hora de la última imagen mostrada: la ventana se refresca como máximo a 30 veces por segundo
     if args.show:
         if sys.platform == "win32":
             # Sin esto, con la escala de pantalla de Windows (125 %, 150 %) la
@@ -504,7 +505,10 @@ def main():
         # Calcular si necesitamos renderizar el frame
         # (solo cuando hay que mostrarlo, guardarlo en video o hacer snapshot)
         need_snapshot = args.snapshot_every > 0 and frame_idx % args.snapshot_every == 0
-        need_render = out is not None or args.show or need_snapshot
+        # La ventana se refresca como máximo a 30 veces por segundo: dibujar y mostrar
+        # cada imagen de un video a 60 fps frena el análisis sin que se note en pantalla
+        show_now = args.show and (time.perf_counter() - t_last_show) >= 1 / 30
+        need_render = out is not None or show_now or need_snapshot
 
         if need_render:
             # 4. Renderizado visual (Piquera, IDs, Trayectorias y HUD)
@@ -603,7 +607,8 @@ def main():
             time_str = f"{h:02d}:{m:02d}:{s:02d}" if h > 0 else f"{m:02d}:{s:02d}"
             print(f"[{time_str}] Procesando frame {frame_idx:05d} | FPS: {fps_proc:.1f} | IN: {counts['in']} | OUT: {counts['out']}")
 
-        if args.show:
+        if show_now:
+            t_last_show = time.perf_counter()
             # Achicar con buena calidad al tamaño de la ventana (si la ventana lo
             # hace sola, en Windows queda pixelado)
             shown = frame
