@@ -28,10 +28,12 @@ En Windows, una línea larga se puede partir con `` ` `` al final de cada línea
 ### a) Video de ejemplo, con la configuración recomendada
 
 ```powershell
-python main.py --video examples/videos/0040-1.mp4 --model models/v5_fomo_borrosas_480_int8.lite --roi-x 900 --roi-y 600 --roi-r 220 --crop-roi --counter hibrido --max-gate 0.9 --max-gate-tentative 1.2 --accel-std 260 --threshold 0.7 --max-lost 0.3 --proj-min-speed 3.0 --flash-exits --static-s 2 --core 0.5 --cancel-s 1.0 --rep-s 60 --show --output video_conteo.mp4 --events eventos.csv
+python main.py --video examples/videos/0040-1.mp4 --model models/v5_fomo_borrosas_480_int8.lite --roi-x 900 --roi-y 600 --roi-r 220 --crop-roi --counter hibrido --max-gate 0.9 --max-gate-tentative 1.2 --accel-std 260 --threshold 0.7 --max-lost 0.3 --proj-min-speed 3.0 --flash-exits --static-s 2 --core 0.5 --cancel-s 1.0 --rep-s 60 --num-threads 4 --show --no-output --events eventos.csv
 ```
 
-Resultado esperado: 32 entradas y 44 salidas. `--show` abre una ventana con el video; se cierra con la tecla `q`.
+Resultado esperado: 32 entradas y 44 salidas. `--show` abre una ventana con el video a su velocidad real; se cierra con la tecla `q`.
+
+Para guardar el video anotado, cambiar `--no-output` por `--output video_conteo.mp4`. Guardar video cuesta tiempo: en un PC de 4 núcleos el análisis baja de ~140 a ~40 imágenes por segundo, y la ventana se ve más lenta que el video real.
 
 ### b) Colmena que el modelo nunca vio
 
@@ -75,7 +77,7 @@ En cada tabla: **defecto** es el valor si no se escribe la opción; **recomendad
 | `--no-output` | apagado | No guarda video. Ahorra tiempo y disco, sobre todo en la Pi. |
 | `--events` | ninguno | CSV con una fila por cada entrada o salida: tiempo, tipo (IN/OUT), ID y posición. Es lo que se compara contra el conteo a mano. |
 | `--log` | ninguno | CSV con una fila por imagen: totales acumulados y velocidad. |
-| `--show` | apagado | Abre una ventana con el video anotado (solo en PC con pantalla). |
+| `--show` | apagado | Abre una ventana con el video anotado (solo en PC con pantalla). Con un video de archivo, lo muestra a su velocidad real: si el equipo analiza más rápido, espera; si analiza más lento, se ve en cámara lenta. |
 | `--dashboard` | apagado | Página web con el conteo en vivo, en `http://IP:5000`. Sirve para ver la Pi desde el celular o la laptop. |
 | `--snapshot-every N` | 0 (apagado) | Guarda una imagen anotada cada N imágenes en `--snapshot-dir` (por defecto `snapshots/`). Sirve para revisar sin pantalla. |
 
@@ -85,7 +87,7 @@ En cada tabla: **defecto** es el valor si no se escribe la opción; **recomendad
 | :--- | :--- | :--- |
 | `--cam-width`, `--cam-height` | del driver | Resolución pedida a la cámara. Con la C930e: 1280 × 720. |
 | `--cam-fps` | del driver | Imágenes por segundo pedidas a la cámara. La C930e llega a 30. |
-| `--num-threads` | 1 | Núcleos del procesador para el modelo. En la Pi 5: 4. |
+| `--num-threads` | 1 | Núcleos del procesador para el modelo. Con 4 el modelo corre casi el doble de rápido y cuenta exactamente lo mismo. En la Pi 5 y en un PC: 4. |
 | `--skip-frames N` | 1 | Analiza 1 de cada N imágenes. Acelera, pero una abeja que despega puede quedar en una sola imagen o en ninguna. Por debajo de ~15 imágenes por segundo efectivas las salidas se cuentan mal. Con cámara en vivo no se usa. |
 
 ### 3.3 El círculo de la piquera

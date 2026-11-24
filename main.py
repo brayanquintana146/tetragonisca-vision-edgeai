@@ -424,7 +424,16 @@ def main():
     global_start_time = time.time()
     t_first = None   # hora del primer frame: no cuenta el arranque de la cámara
 
+    t_show0 = None   # con --show y video de archivo: hora en que "empezó" la reproducción
     if args.show:
+        if sys.platform == "win32":
+            # Sin esto, con la escala de pantalla de Windows (125 %, 150 %) la
+            # ventana de OpenCV se ve borrosa
+            try:
+                import ctypes
+                ctypes.windll.shcore.SetProcessDpiAwareness(2)
+            except Exception:
+                pass
         win_name = "Tetragonisca Vision - Inferencia y Conteo"
         cv2.namedWindow(win_name, cv2.WINDOW_NORMAL)
         cv2.resizeWindow(win_name, min(width, 1280), min(height, 720))
@@ -595,8 +604,26 @@ def main():
             print(f"[{time_str}] Procesando frame {frame_idx:05d} | FPS: {fps_proc:.1f} | IN: {counts['in']} | OUT: {counts['out']}")
 
         if args.show:
-            cv2.imshow("Tetragonisca Vision - Inferencia y Conteo", frame)
-            if cv2.waitKey(1) & 0xFF == ord('q'):
+            # Achicar con buena calidad al tamaño de la ventana (si la ventana lo
+            # hace sola, en Windows queda pixelado)
+            shown = frame
+            try:
+                _, _, ww, wh = cv2.getWindowImageRect(win_name)
+            except cv2.error:
+                ww = wh = 0
+            if 0 < ww < frame.shape[1] and 0 < wh < frame.shape[0]:
+                k = min(ww / frame.shape[1], wh / frame.shape[0])
+                shown = cv2.resize(frame, (int(frame.shape[1] * k), int(frame.shape[0] * k)),
+                                   interpolation=cv2.INTER_AREA)
+            cv2.imshow(win_name, shown)
+            wait_ms = 1
+            if not is_camera:
+                # Video de archivo: no mostrarlo más rápido que su velocidad real
+                if t_show0 is None:
+                    t_show0 = time.perf_counter() - frame_idx / fps
+                ahead = t_show0 + frame_idx / fps - time.perf_counter()
+                wait_ms = max(1, int(ahead * 1000))
+            if cv2.waitKey(wait_ms) & 0xFF == ord('q'):
                 break
 
     t_last_frame = time.time()
