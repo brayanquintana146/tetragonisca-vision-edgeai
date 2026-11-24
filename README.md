@@ -50,6 +50,8 @@ python main.py --video examples/videos/0040-1.mp4 --model models/v5_fomo_borrosa
 
 Al terminar, la consola muestra las entradas, las salidas y la velocidad. `--output` guarda el video anotado y `--events` un CSV con cada evento (tiempo, tipo y posición).
 
+Para ver el conteo en una ventana, agregar `--show --no-output --num-threads 4` (se cierra con `q`). Guardar el video con `--output` frena el análisis, y en Windows la ventana va a la velocidad real del video si el equipo analiza más de 60 imágenes por segundo.
+
 Opciones principales:
 
 | Opción | Para qué sirve |
@@ -60,7 +62,9 @@ Opciones principales:
 | `--crop-roi` | Recorta un cuadrado centrado en la piquera antes del modelo, como en el entrenamiento |
 | `--track-scale` | Tamaño de referencia de la abeja cuando el círculo es chico (por ejemplo `--roi-r 100 --track-scale 220`) |
 | `--dashboard` | Página web con el conteo en vivo, en el puerto 5000 |
-| `--no-output` | No guarda el video anotado (más rápido en la Raspberry Pi) |
+| `--show` | Abre una ventana con el conteo (solo en PC con pantalla; `q` para cerrar) |
+| `--num-threads` | Núcleos para el modelo (4 en la Raspberry Pi 5 y en un PC) |
+| `--no-output` | No guarda el video anotado (más rápido) |
 
 `python main.py --help` lista todas las opciones.
 

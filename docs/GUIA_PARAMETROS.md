@@ -31,7 +31,7 @@ En Windows, una línea larga se puede partir con `` ` `` al final de cada línea
 python main.py --video examples/videos/0040-1.mp4 --model models/v5_fomo_borrosas_480_int8.lite --roi-x 900 --roi-y 600 --roi-r 220 --crop-roi --counter hibrido --max-gate 0.9 --max-gate-tentative 1.2 --accel-std 260 --threshold 0.7 --max-lost 0.3 --proj-min-speed 3.0 --flash-exits --static-s 2 --core 0.5 --cancel-s 1.0 --rep-s 60 --num-threads 4 --show --no-output --events eventos.csv
 ```
 
-Resultado esperado: 32 entradas y 44 salidas. `--show` abre una ventana con el video a su velocidad real; se cierra con la tecla `q`.
+Resultado esperado: unas 32 entradas y 44 salidas (el valor exacto puede variar en 1 o 2 según el equipo: ver la sección 6). `--show` abre una ventana con el video a su velocidad real; se cierra con la tecla `q`.
 
 Para guardar el video anotado, cambiar `--no-output` por `--output video_conteo.mp4`. Guardar video cuesta tiempo: en las pruebas el análisis bajó a menos de la mitad de velocidad, y la ventana puede verse más lenta que el video real.
 
@@ -77,7 +77,7 @@ En cada tabla: **defecto** es el valor si no se escribe la opción; **recomendad
 | `--no-output` | apagado | No guarda video. Ahorra tiempo y disco, sobre todo en la Pi. |
 | `--events` | ninguno | CSV con una fila por cada entrada o salida: tiempo, tipo (IN/OUT), ID y posición. Es lo que se compara contra el conteo a mano. |
 | `--log` | ninguno | CSV con una fila por imagen: totales acumulados y velocidad. |
-| `--show` | apagado | Abre una ventana con el video anotado (solo en PC con pantalla). Con un video de archivo, lo muestra a su velocidad real: si el equipo analiza más rápido, espera; si analiza más lento, se ve en cámara lenta. |
+| `--show` | apagado | Abre una ventana con el video anotado (solo en PC con pantalla); se cierra con `q`. Con un video de archivo lo muestra a su velocidad real: si el equipo analiza más rápido, espera; si analiza más lento, se ve en cámara lenta. La ventana se refresca como máximo 30 veces por segundo, aunque el video tenga 60: se ve igual de fluido y el análisis no se frena. La imagen se achica al tamaño de la ventana con buena calidad y, en Windows, se evita que la escala de pantalla la ponga borrosa. El conteo es el mismo con o sin ventana. |
 | `--dashboard` | apagado | Página web con el conteo en vivo, en `http://IP:5000`. Sirve para ver la Pi desde el celular o la laptop. |
 | `--snapshot-every N` | 0 (apagado) | Guarda una imagen anotada cada N imágenes en `--snapshot-dir` (por defecto `snapshots/`). Sirve para revisar sin pantalla. |
 
@@ -193,6 +193,17 @@ En una colmena que el modelo no conoce, algunas manchas del fondo se detectan co
 Al terminar, la consola muestra el resumen: entradas, salidas, velocidad y si el análisis fue al ritmo del video.
 
 ## 6. Preguntas frecuentes
+
+**¿Por qué se ve lento o en cámara lenta?**
+Casi siempre por una de estas tres cosas, y ninguna cambia el conteo:
+1. `--output` guarda un video de 1920×1080 y baja la velocidad a menos de la mitad. Usar `--no-output` si no hace falta el video.
+2. Falta `--num-threads 4`: sin eso el modelo usa un solo núcleo.
+3. Con `--show` y un equipo que analiza menos de 60 imágenes por segundo, la ventana va en cámara lenta porque el video llega a 60.
+
+Para saber cuál es, correr sin `--show` y sin `--output` y mirar en el RESUMEN las líneas **Llegan** (lo que manda el video), **Puede analizar** (lo que da el equipo) y **Analizó** (lo que se logró en total). Si "Puede analizar" supera a "Llegan", el equipo alcanza y lo lento es la ventana o el video guardado. En un PC con Windows de pruebas: 125 imágenes por segundo contra 60, y el minuto de video se procesó en 47 segundos.
+
+**¿Por qué el conteo da distinto en otro computador?**
+En Windows el modelo corre con TensorFlow y en Linux y la Raspberry Pi con LiteRT. Los dos motores dan resultados apenas distintos en algunas celdas del modelo, y eso mueve uno o dos eventos. En el `0040-1` con la configuración recomendada salió 32 entradas y 44 salidas en Linux y 33 y 46 en Windows. Entre equipos coinciden más o menos el 55 al 65 % de los eventos individuales, aunque el total sale parecido ([VALIDACION.md](VALIDACION.md)).
 
 **¿Por qué FOMO y no YOLO?**
 FOMO pesa 54 KB y en la Pi 5 analiza unas 90 imágenes por segundo. Se probó un YOLO en Edge Impulse (v9): daba mAP@50 de 0.62 en test y tardaba 188 ms por imagen en una Pi 4, unas 10 veces más lento. Para contar solo hace falta el centro de cada abeja, no su caja.
