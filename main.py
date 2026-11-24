@@ -31,26 +31,27 @@ def draw_hud(frame, counts):
     """
     Dibuja el tablero de entradas y salidas en la esquina superior izquierda.
 
-    Los números van grandes para leerlos de lejos (demo, pantalla de la Pi).
-    Los tamaños se escalan con la altura del frame: se ve igual en 720p y en 1080p.
+    El texto es el doble de grande que antes para leerlo de lejos (demo, pantalla
+    de la Pi). Los tamaños se escalan con la altura del frame: se ve igual en 720p
+    y en 1080p.
     """
     font = cv2.FONT_HERSHEY_SIMPLEX
     k = frame.shape[0] / 1080.0                          # 1.0 en 1080p, 0.67 en 720p
-    tit_s, tit_t = 0.7 * k, max(1, round(1 * k))         # título
-    lab_s, lab_t = 1.0 * k, max(1, round(2 * k))         # "Entradas (IN) :"
-    num_s, num_t = 2.6 * k, max(2, round(6 * k))         # el número
+    tit_s, tit_t = 1.0 * k, max(1, round(2 * k))         # título
+    row_s, row_t = 1.3 * k, max(2, round(4 * k))         # "Entradas (IN) : 12"
     pad = max(6, int(20 * k))
 
     title = "Tetragonisca Vision EdgeAI"
     rows = [
-        ("Entradas (IN) :", counts['in'], (0, 255, 0)),
-        ("Salidas  (OUT):", counts['out'], (0, 0, 255)),
+        (f"Entradas (IN) : {counts['in']}", (0, 255, 0)),
+        (f"Salidas  (OUT): {counts['out']}", (0, 0, 255)),
     ]
     (tw, th), _ = cv2.getTextSize(title, font, tit_s, tit_t)
-    lab_w = max(cv2.getTextSize(r[0], font, lab_s, lab_t)[0][0] for r in rows)
-    (nw, nh), _ = cv2.getTextSize("0000", font, num_s, num_t)
-    row_h = nh + pad
-    box_w = max(tw, lab_w + pad + nw) + 2 * pad
+    sizes = [cv2.getTextSize(r[0], font, row_s, row_t)[0] for r in rows]
+    # Ancho fijo (con 3 dígitos) para que la caja no cambie de tamaño al contar
+    (rw, rh), _ = cv2.getTextSize("Salidas  (OUT): 000", font, row_s, row_t)
+    row_h = rh + pad
+    box_w = max(tw, rw) + 2 * pad
     box_h = 2 * pad + th + 2 * row_h
 
     x0 = y0 = max(5, int(10 * k))
@@ -60,10 +61,9 @@ def draw_hud(frame, counts):
 
     x, y = x0 + pad, y0 + pad + th
     cv2.putText(frame, title, (x, y), font, tit_s, (255, 255, 255), tit_t)
-    for label, value, color in rows:
+    for text, color in rows:
         y += row_h
-        cv2.putText(frame, label, (x, y), font, lab_s, color, lab_t)
-        cv2.putText(frame, str(value), (x + lab_w + pad, y), font, num_s, color, num_t)
+        cv2.putText(frame, text, (x, y), font, row_s, color, row_t)
 
 
 class LatestFrameReader:
