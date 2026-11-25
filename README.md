@@ -9,6 +9,20 @@ Conteo de entradas y salidas de abejas nativas sin aguijón (*Tetragonisca angus
 
 Un detector FOMO de 54 KB encuentra las abejas en cada imagen. Un algoritmo de seguimiento las sigue de una imagen a la siguiente y cuenta cuántas entran y cuántas salen.
 
+<p align="center"><img src="docs/img/demo_conteo.webp" alt="Conteo en vivo en el video 0040-1" width="720"></p>
+
+<p align="center"><i>Los primeros 12 segundos del video <code>0040-1</code>. Cada punto es una abeja con su número de seguimiento; el tablero suma una entrada o una salida cuando una abeja cruza el círculo amarillo.</i></p>
+
+## El problema
+
+Los meliponicultores de Huyro (Cusco) crían angelitas (*Tetragonisca angustula*), una abeja nativa sin aguijón. Para saber si una colonia está sana hay que abrir la caja, y eso la estresa, así que no se puede hacer seguido. Cuando una colonia se debilita, por frío, falta de flores o el ataque de la abeja limón o de las moscas fóridas, el meliponicultor suele enterarse tarde.
+
+El número de abejas que entran y salen por la piquera muestra la actividad de la colonia sin tocarla. Pero contarlo a mano no es viable. La angelita mide unos 5 mm, vuela muy rápido, al despegar se ve borrosa y frente a la entrada hay guardianas que revolotean sin entrar ni salir.
+
+Este proyecto cuenta entradas y salidas con una cámara y una Raspberry Pi 5 instalada en la propia colmena. Todo se procesa ahí, sin internet. Es el módulo de visión de la colmena inteligente que desarrollamos en la Pasantía 2026-1 de la PUCP (Módulo de Innovación Territorial, Sistema de Innovación Huyro, SI HUYRO), que también mide temperatura, humedad y peso.
+
+Equipo de la pasantía: Brayan Quintana, Susan Lozano, Clara Moreno y Julian Huaman.
+
 ## Resultados
 
 | Qué se midió | Resultado |
@@ -24,9 +38,9 @@ El punto débil son las salidas: la abeja que despega aparece borrosa en una o d
 
 ## Cómo funciona
 
-```text
-Cámara o video ─► Detector FOMO (480×480, int8) ─► Seguimiento (Kalman + Húngaro) ─► Contador ─► Entradas / Salidas
-```
+![Los pasos del programa sobre una imagen del video 0040-1](docs/img/como_funciona.jpg)
+
+*Una misma imagen del video `0040-1` (segundo 3.2) en cada paso. Del 3 al 5 se muestra solo el detalle de la piquera.*
 
 1. **Detección.** El modelo FOMO, entrenado en Edge Impulse, marca el centro de cada abeja.
 2. **Seguimiento.** Cada abeja recibe un identificador que se mantiene mientras se mueve. Las distancias se miden en radios de la piquera y los tiempos en segundos, así que funciona igual con otra resolución o velocidad de cámara.
@@ -57,7 +71,7 @@ Opciones principales:
 | Opción | Para qué sirve |
 | :--- | :--- |
 | `--video` | Archivo de video, o cámara (`0`, `/dev/video0`) |
-| `--model` | Modelo `.lite` de la carpeta `models/` |
+| `--model` | Modelo `.lite` de la carpeta `models/` (si no se indica, la v5) |
 | `--roi-x`, `--roi-y`, `--roi-r` | Centro y radio, en píxeles, del círculo sobre la piquera |
 | `--crop-roi` | Recorta un cuadrado centrado en la piquera antes del modelo, como en el entrenamiento |
 | `--track-scale` | Tamaño de referencia de la abeja cuando el círculo es chico (por ejemplo `--roi-r 100 --track-scale 220`) |
@@ -80,7 +94,7 @@ El nombre de cada archivo empieza con su versión en Edge Impulse.
 | **v5** | v3 + 273 imágenes de abejas borrosas en vuelo | 480×480 | **0.94** |
 | v7 | v5 sin la colmena 005 (para la prueba a ciegas) | 480×480 | 0.93 |
 
-En el repositorio están la v3 y la v5 (`models/`). El historial completo y la guía para entrenar están en [docs/ENTRENAMIENTO.md](docs/ENTRENAMIENTO.md).
+En `models/` están las versiones v3 a v8. La v5 es la recomendada y la que usa `main.py` si no se indica `--model`. El historial completo y la guía para entrenar están en [docs/ENTRENAMIENTO.md](docs/ENTRENAMIENTO.md).
 
 Proyectos públicos en Edge Impulse: [modelo base](https://studio.edgeimpulse.com/studio/1073834) (solo colmena 004) y [modelo multicolmena](https://studio.edgeimpulse.com/studio/1108884).
 
@@ -92,9 +106,10 @@ tetragonisca-vision-edgeai/
 ├── src/           # Seguimiento, contador, panel web
 ├── models/        # Modelos FOMO exportados (.lite)
 ├── bench/         # Evaluación: comparar eventos, guardar y repetir detecciones
-├── tools/         # Anotar a mano entradas y salidas, editar cajas
+├── tools/         # Anotar a mano entradas y salidas, editar cajas, probar la cámara
 ├── scripts/       # Preparación de datos para Edge Impulse
 ├── data/          # Conteos a mano (gt_*.csv) y datos de entrenamiento
+├── tests/         # Pruebas del seguimiento y del contador (pytest)
 ├── docs/          # Documentación
 └── deployment.md  # Instalación en la Raspberry Pi 5
 ```
@@ -108,14 +123,15 @@ tetragonisca-vision-edgeai/
 | [docs/TRACKING_ALGORITHM.md](docs/TRACKING_ALGORITHM.md) | Algoritmo de seguimiento y reglas de conteo |
 | [docs/ENTRENAMIENTO.md](docs/ENTRENAMIENTO.md) | Preparar datos, entrenar en Edge Impulse e historial de versiones |
 | [deployment.md](deployment.md) | Instalación y uso en la Raspberry Pi 5 |
-| [docs/PENDIENTES.md](docs/PENDIENTES.md) | Trabajo pendiente |
+| [docs/TRABAJO_FUTURO.md](docs/TRABAJO_FUTURO.md) | Qué sigue: más datos, otras colmenas e instalación en la colmena |
 
 ## Pruebas
 
 ```powershell
-python test_counter_hybrid.py
-python test_tracker_v2.py
+pytest
 ```
+
+Las 16 pruebas de `tests/` revisan el seguimiento y el contador con recorridos sintéticos: una abeja que entra, una que sale, una guardiana que se asoma y vuelve, un punto fijo del fondo que parpadea, y el mismo recorrido a otra resolución y otra velocidad de cámara.
 
 ## Datos
 

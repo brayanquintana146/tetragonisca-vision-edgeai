@@ -24,7 +24,7 @@ def main():
     ap = argparse.ArgumentParser(description="Detección de FOMO alrededor de cada evento anotado")
     ap.add_argument("--gt", default="data/gt_0040-1.csv")
     ap.add_argument("--video", default="examples/videos/0040-1.mp4")
-    ap.add_argument("--model", default="models/v3_fomo_tetragonisca_int8.lite")
+    ap.add_argument("--model", default="models/v5_fomo_borrosas_480_int8.lite")
     ap.add_argument("--roi-x", type=int, default=900)
     ap.add_argument("--roi-y", type=int, default=600)
     ap.add_argument("--threshold", type=float, default=0.35)

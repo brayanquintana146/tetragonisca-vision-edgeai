@@ -100,7 +100,7 @@ python main.py --video 0 --cam-width 640 --cam-height 480 --cam-fps 30 \
 El conteo se demuestra con videos grabados, no con la cámara filmando una pantalla (el parpadeo, los reflejos y el tamaño cambian los resultados). Con la configuración recomendada, y el dashboard en `http://pi5.local:5000`:
 
 ```bash
-python main.py --video examples/videos/0040-1.mp4 --model models/v5_fomo_borrosas_480_int8.lite --roi-x 900 --roi-y 600 --roi-r 220 --crop-roi --counter hibrido --max-gate 0.9 --max-gate-tentative 1.2 --accel-std 260 --threshold 0.7 --max-lost 0.3 --proj-min-speed 3.0 --flash-exits --static-s 2 --core 0.5 --cancel-s 1.0 --num-threads 4 --dashboard --output video_demo.mp4 --events eventos_demo.csv
+python main.py --video examples/videos/0040-1.mp4 --model models/v5_fomo_borrosas_480_int8.lite --roi-x 900 --roi-y 600 --roi-r 220 --crop-roi --counter hibrido --max-gate 0.9 --max-gate-tentative 1.2 --accel-std 260 --threshold 0.7 --max-lost 0.3 --proj-min-speed 3.0 --flash-exits --static-s 2 --core 0.5 --cancel-s 1.0 --rep-s 60 --num-threads 4 --dashboard --output video_demo.mp4 --events eventos_demo.csv
 ```
 
 Con un archivo de video se procesan todos los cuadros, así que el conteo no depende de la velocidad de la Pi. La cámara en vivo puede mostrarse unos segundos (comando del paso 5 con `--snapshot-every 30`) para ver que captura y detecta; esos conteos no se presentan.

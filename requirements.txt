@@ -5,6 +5,7 @@ numpy>=1.23.0
 scipy>=1.10.0
 flask>=3.0.0          # dashboard web (--dashboard)
 Pillow>=10.0.0        # scripts/01_preparar_train.py
+pytest>=7.0           # pruebas: pytest desde la raíz
 
 # Inferencia de modelos .lite: main.py prueba en este orden
 # ai-edge-litert -> tflite-runtime -> tensorflow.

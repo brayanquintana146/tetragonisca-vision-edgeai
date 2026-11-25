@@ -45,9 +45,19 @@ Modelo v5, configuración recomendada. Cada celda es eventos acertados / contado
 
 En el `0040-1` el F1 al azar es 0.29 en entradas y 0.38 en salidas.
 
+![F1 del programa contra el azar en el 0040-1](img/validacion_f1_azar.png)
+
+La barra gris es lo que se obtiene con los mismos eventos del programa movidos al azar en el tiempo. La distancia entre las dos barras es lo que el programa acierta de verdad.
+
 Las reglas del contador se ajustaron con estos dos videos, así que estos números son de desarrollo, no de prueba.
 
 En el `0040-1`, 33 de las 78 salidas se pierden. La mayoría son abejas que el detector no ve en ninguna imagen: al despegar salen borrosas.
+
+![Eventos del 0040-1 a lo largo del tiempo](img/validacion_linea_tiempo.png)
+
+Cada línea gris une un evento contado a mano con el que contó el programa. Los círculos naranjas son eventos reales que el programa no contó y los triángulos son eventos que contó sin que pasaran. Las salidas perdidas se juntan en ráfagas (por ejemplo entre los 33 y 41 s y entre los 50 y 57 s), cuando salen varias abejas a la vez.
+
+Esta figura es de una corrida en Linux (32 entradas y 44 salidas). La tabla de arriba es de Windows, que cuenta uno o dos eventos más porque usa otro motor para el modelo ([GUIA_PARAMETROS.md](GUIA_PARAMETROS.md#6-preguntas-frecuentes)).
 
 ## Prueba a ciegas en una colmena nueva
 
@@ -68,6 +78,10 @@ En el `0040-1`, 33 de las 78 salidas se pierden. La mayoría son abejas que el d
 | **v7: nunca vio la colmena** | 21 / 23, **0.78** | 20 / 28, **0.66** |
 | v8: v7 + 50 fotos del fondo de la colmena | 24 / 25, 0.86 | 17 / 26, 0.58 |
 | v5: vio la colmena en el entrenamiento | 25 / 28, 0.85 | 23 / 27, 0.77 |
+
+![F1 de la prueba a ciegas por modelo, contra el azar](img/validacion_prueba_ciegas.png)
+
+La franja gris es el rango del F1 al azar en esos dos videos. Las tres versiones del modelo quedan muy por encima. En entradas, v7 (que nunca vio la colmena) queda a 0.07 del v5; en salidas, a 0.11.
 
 Detección foto por foto en la misma colmena (349 fotos etiquetadas, umbral 0.5): v7 encuentra 94 de cada 100 abejas (recall 0.94), pero marca muchos puntos falsos del fondo (precisión 0.55, F1 0.70). El v5 obtiene F1 0.92.
 

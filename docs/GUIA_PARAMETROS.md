@@ -12,13 +12,46 @@ En cada imagen del video pasan cuatro cosas, en este orden:
 ```
 
 1. **Recorte.** Se toma un cuadrado alrededor de la piquera y se reduce al tamaño que espera el modelo (480×480 en la v5).
+
+   Ejemplo con el video `0040-1` y `--roi-x 900 --roi-y 600 --roi-r 220`. El cuadrado naranja, centrado en la piquera, es lo que se recorta (1080×1080 píxeles):
+
+   | Imagen original (1920×1080) | Lo que ve el modelo (480×480) |
+   | :---: | :---: |
+   | ![Imagen original con el cuadrado de recorte](img/recorte_original.jpg) | ![Recorte de 480×480 que recibe el modelo](img/recorte_modelo.jpg) |
+
+   Sin `--crop-roi`, el modelo recibiría la imagen completa aplastada a 480×480 y las abejas se verían más chicas y deformadas. Con el recorte llegan del mismo tamaño que en el entrenamiento.
+
 2. **Detección.** El modelo FOMO divide la imagen en una grilla de celdas (60×60 en la v5) y da, para cada celda, la probabilidad de que haya una abeja. Las celdas vecinas con abeja se juntan en un solo punto: el centro de la abeja. FOMO no dibuja cajas, solo da centros. Por eso es tan liviano (54 KB).
+
+   ![Cómo detecta FOMO: grilla de celdas, probabilidad por celda y centros de las abejas](img/fomo_deteccion.jpg)
+
+   Ejemplo real con la v5 en el mismo recorte de arriba: 13 celdas pasan el umbral de 0.7 y se juntan en 6 abejas (las que están en la piquera). En la imagen 2 se ve que el modelo solo "se enciende" sobre las abejas; la madera y el tubo quedan casi en 0.
+
+   La v5 es el modelo recomendado: es el que mejor detecta (F1 0.94 en el test de Edge Impulse). Las versiones siguientes no son mejoras sino experimentos: v6 usa 320×320 y pierde abejas, v7 y v8 se entrenaron sin la colmena 005 para la prueba a ciegas, y v9 (YOLO) era 10 veces más lento. El detalle está en [ENTRENAMIENTO.md](ENTRENAMIENTO.md).
 3. **Seguimiento.** El tracker une los puntos de una imagen con los de la siguiente, para saber que "esta abeja es la misma de hace un instante". Usa un **filtro de Kalman**, que predice dónde estará cada abeja según su velocidad, y el **algoritmo Húngaro**, que reparte las detecciones entre las abejas de forma que la distancia total sea la menor posible.
+
+   ![La misma abeja conserva su ID de una imagen a la siguiente](img/tracker_mismo_id.jpg)
+
+   Una abeja real del `0040-1` llega volando a la piquera. En cada imagen el tracker la reconoce como la misma (ID 36) aunque recorre unos 50 píxeles entre una imagen y la siguiente.
+
+   ![Filtro de Kalman y algoritmo Húngaro](img/tracker_kalman_hungaro.jpg)
+
+   - **Kalman (izquierda, la misma abeja):** con sus posiciones anteriores calcula su velocidad y **predice** dónde estará en la siguiente imagen (círculo azul). Solo busca detecciones dentro de una ventana alrededor de esa predicción (círculo blanco punteado, `--max-gate`). Cuando FOMO la detecta (punto rojo), **corrige** su posición a un punto intermedio (estrella verde): no confía del todo ni en la predicción ni en la detección.
+   - **Húngaro (derecha, ejemplo con números simples):** con varias abejas y varias detecciones, repartir "cada abeja toma la más cercana" puede salir mal: A se queda con D1 y a B le toca D2, a 108 px, y los ID se intercambian. El algoritmo Húngaro prueba los repartos posibles de forma eficiente y elige el de menor distancia total (91 px contra 158 px).
 4. **Conteo.** Sobre la piquera se dibuja un círculo amarillo. Una abeja que cruza de fuera hacia dentro es una **entrada**; de dentro hacia fuera, una **salida**. Varias reglas descartan lo que no es una entrada o salida real: guardianas que revolotean, abejas que se asoman y vuelven, y manchas del fondo que el modelo confunde con abejas.
+
+   ![Una entrada y una salida cruzando el círculo de la piquera](img/conteo_circulo.jpg)
+
+   Dos abejas reales del `0040-1`. La verde viene de fuera y cruza el borde hacia dentro: se cuenta una entrada. La roja estaba en la piquera y cruza el borde hacia fuera: se cuenta una salida. El punto blanco marca el momento en que se cuenta.
 
 ### Dos unidades que conviene entender
 
-- **Escala (en "radios").** Las distancias del tracker no se miden en píxeles, sino en múltiplos del radio del círculo (`--roi-r`) o de `--track-scale`. Así los mismos parámetros sirven en un video de 1920×1080 y en uno de 640×480.
+- **Escala (en "radios").** El centro y el radio del círculo (`--roi-x`, `--roi-y`, `--roi-r`) sí van en píxeles: se eligen mirando la imagen, para que el círculo rodee la piquera. Después, el tracker usa ese radio como unidad de medida: todas sus distancias (cuánto puede moverse una abeja entre imágenes, qué tan cerca deben estar dos detecciones para ser la misma abeja) se dan en "radios". Con `--track-scale` se usa otro valor como unidad, sin cambiar el círculo. Así los mismos parámetros sirven en un video de 1920×1080 y en uno de 1280×720: solo cambia el círculo.
+
+  ![La misma ventana de búsqueda en dos resoluciones](img/escala_radios.jpg)
+
+  La misma imagen del `0040-1` a dos resoluciones. A 1920×1080 el círculo mide 220 px y `--max-gate 0.9` deja buscar a la abeja hasta 198 px; a 1280×720 el círculo mide 147 px y la misma opción da 132 px. En píxeles es distinto, pero frente a la abeja y a la piquera es la misma ventana.
+
 - **Tiempo (en segundos).** Los tiempos se miden en segundos reales, no en imágenes. Así sirven igual a 60 fps (videos del dataset) y a 30 fps (cámara C930e).
 
 ## 2. Comandos listos para usar
@@ -72,7 +105,7 @@ En cada tabla: **defecto** es el valor si no se escribe la opción; **recomendad
 | Opción | Defecto | Qué hace |
 | :--- | :--- | :--- |
 | `--video` | (obligatorio) | Archivo de video, o número de cámara (`0`) o `/dev/video0` en la Pi. |
-| `--model` | `models/v3_...` | Modelo `.lite` a usar. Se recomienda `models/v5_fomo_borrosas_480_int8.lite`: es el que mejor detecta y el de los resultados publicados. |
+| `--model` | `models/v5_fomo_borrosas_480_int8.lite` | Modelo `.lite` a usar. La v5 es la que mejor detecta y la de los resultados publicados. Las otras versiones de `models/` sirven para repetir pruebas anteriores, por ejemplo la v7 para la prueba a ciegas. |
 | `--output` | `output_result.mp4` | Video con las anotaciones dibujadas. |
 | `--no-output` | apagado | No guarda video. Ahorra tiempo y disco, sobre todo en la Pi. |
 | `--events` | ninguno | CSV con una fila por cada entrada o salida: tiempo, tipo (IN/OUT), ID y posición. Es lo que se compara contra el conteo a mano. |
