@@ -9,7 +9,7 @@ Conteo de entradas y salidas de abejas nativas sin aguijón (*Tetragonisca angus
 
 Un detector FOMO de 54 KB encuentra las abejas en cada imagen. Un algoritmo de seguimiento las sigue de una imagen a la siguiente y cuenta cuántas entran y cuántas salen.
 
-<p align="center"><img src="docs/img/demo_conteo.webp" alt="Conteo en vivo en el video 0040-1" width="720"></p>
+<p align="center"><img src="docs/img/demo_conteo.webp" alt="Conteo en vivo en el video 0040-1" width="360"></p>
 
 <p align="center"><i>Los primeros 12 segundos del video <code>0040-1</code>. Cada punto es una abeja con su número de seguimiento; el tablero suma una entrada o una salida cuando una abeja cruza el círculo amarillo.</i></p>
 
