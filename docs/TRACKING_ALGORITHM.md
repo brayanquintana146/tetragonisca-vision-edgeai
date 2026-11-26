@@ -1,6 +1,21 @@
-# Arquitectura de Seguimiento y Conteo (Tracking & Counting Algorithm)
+# Algoritmo de seguimiento y conteo
 
-> El sistema tiene dos versiones: **v2** (por defecto, `--tracker v2`) y **v1** (`--tracker v1`, EuTrack original, descrito más abajo). v2 nació porque v1 dejaba de contar las salidas cuando la entrada era una webcam y no el archivo de video.
+Este documento explica cómo se sigue a cada abeja de una imagen a la siguiente y cómo se decide qué es una entrada y qué es una salida. También guarda los resultados de desarrollo de cada regla: con qué video se diseñó, cuánto mejoró y qué se descartó. Para usar el programa basta con la [guía de parámetros](GUIA_PARAMETROS.md).
+
+## Las reglas en una tabla
+
+Cada regla nació de un error concreto visto en un video. La configuración recomendada usa las cinco primeras. La última se agrega en colmenas que el modelo no conoce.
+
+| Regla | Opción | Error que corrige |
+| :--- | :--- | :--- |
+| [Contador híbrido](#contador-híbrido---counter-hibrido-srccounterpybeecounterhybrid) | `--counter hibrido` | Un recorrido largo que se pega a una guardiana y salta a otra abeja pierde las salidas |
+| [Salidas fugaces](#salidas-fugaces---flash-exits-srccounterpyflashexits) | `--flash-exits` | La abeja que despega se ve solo 1 o 2 imágenes, borrosa, y no llega a tener recorrido |
+| [Boca de la piquera](#boca-de-la-piquera---core) | `--core`, `--cancel-s` | Las guardianas que revolotean cruzan el borde del círculo sin entrar a la boca |
+| [Puntos quietos](#puntos-quietos---static-s) | `--static-s` | Una sombra fija que el detector ve a ratos parece una abeja que despega |
+| [Puntos fijos repetidos](#puntos-fijos-repetidos---rep-s) | `--rep-s` | Un punto del fondo que se enciende una y otra vez en el mismo sitio |
+| [Manchas fijas del fondo](#manchas-fijas-del-fondo---in-max-age---in-park-s---park-s) | `--in-max-age`, `--in-park-s`, `--park-s` | Una mancha que el tracker sigue como abeja quieta y que "entra" al saltar a una abeja real |
+
+El sistema tiene dos versiones del tracker: **v2** (por defecto, `--tracker v2`) y **v1** (`--tracker v1`, EuTrack, descrito al final). v2 nació porque v1 dejaba de contar las salidas cuando la entrada era una webcam y no el archivo de video.
 
 ## Tracker v2: independiente de la resolución y de los FPS
 
@@ -21,7 +36,7 @@ Además, el umbral `max_distance` se aplicaba **después** del Algoritmo Húngar
 2. **Filtro de Kalman de velocidad constante:** reemplaza el suavizado exponencial, que se quedaba atrás cuando la abeja aceleraba. La incertidumbre del filtro crece mientras la abeja no se ve.
 3. **Gating antes del Húngaro:** cada track solo compite por las detecciones dentro de su ventana, de 3σ de su predicción (limitada a 0.35–1.2 radios).
 4. **Tracks tentativos:** una detección aislada (reflejo, ruido de la pantalla) necesita 2 detecciones para convertirse en un ID.
-5. **Doble umbral:** una detección débil (≥ 0.35, típica de una abeja borrosa) puede continuar un track existente. Solo una fuerte (≥ 0.55) crea uno nuevo.
+5. **Doble umbral:** una detección débil (≥ 0.35, `--assoc-threshold`, típica de una abeja borrosa) puede continuar un track existente. Solo una fuerte crea uno nuevo (`--threshold`: 0.55 por defecto, 0.7 en la configuración recomendada).
 6. **Conteo origen-destino:** una salida es un track que **nació dentro** de la ROI y **terminó fuera**, y una entrada es lo contrario. Si FOMO pierde la abeja al despegar o la detecta recién al aterrizar, se proyecta su posición con la velocidad del Kalman durante 0.25 s. Las guardianas que oscilan en el borde nacen y mueren del mismo lado, así que no cuentan.
 7. **Captura en vivo:** la cámara se lee en un hilo aparte y siempre se procesa el frame más reciente, con su hora real de captura. Así no se acumulan frames viejos en el buffer.
 
@@ -33,12 +48,16 @@ Además, el umbral `max_distance` se aplicaba **después** del Algoritmo Húngar
 - **Salidas por cruce (`BeeCounterCross`):** cada track lleva su lado actual (dentro/fuera, con histéresis de 0.15 r). Cada paso de dentro a fuera es una salida candidata. Si el track vuelve a cruzar antes de `--cancel-s` (0.5 s), se anulan los dos cruces: es una abeja que se asomó. Al cerrarse el track se proyecta su posición con la velocidad del Kalman, solo si va a más de `--proj-min-speed` (1.5 r/s).
 - **Entradas como `BeeCounterV2`:** una por track y sin proyectar hacia atrás el nacimiento. Contar cada cruce hacia dentro sumaba entradas falsas de guardianas que caminan por el borde.
 
+![El mismo recorrido de 15 s con el contador v2 y con el híbrido](img/regla_contador_hibrido.jpg)
+
+Un recorrido real del `0040-1` (ID 6) que dura 15 s: una guardiana que vuela alrededor de la piquera y al final despega. Las flechas marcan las dos veces que cruza el círculo amarillo hacia fuera. A los 9.1 s (naranja) sale sin haber pasado por la boca y regresa: no es una salida. A los 14.9 s (azul) sale desde la boca y se va: es la salida real. El contador v2 suma una salida en cuanto la abeja cruza el borde por primera vez, así que cuenta la falsa de los 9.1 s y ya no cuenta la real. El híbrido revisa cada cruce y, con `--core 0.5`, solo cuenta el que viene de la boca (círculo magenta, ver [Boca de la piquera](#boca-de-la-piquera---core)).
+
 **Ajustes del tracker que lo acompañan:**
 - `--max-gate 0.6`: un track confirmado solo acepta detecciones a menos de 0.6 radios de su predicción, así salta menos entre abejas vecinas.
 - `--max-gate-tentative 1.2`: un track nuevo puede enlazar saltos grandes de una abeja en vuelo rápido.
 - `--accel-std 80`: el Kalman acepta aceleraciones bruscas, como las de un despegue.
 
-Los valores por defecto de `main.py` no cambian (`--counter v2`, `--max-gate 1.2`, `--accel-std 40`).
+Esos fueron los valores del primer ajuste. La configuración recomendada actual usa `--max-gate 0.9 --accel-std 260`, elegidos junto con `--flash-exits` ([GUIA_PARAMETROS.md](GUIA_PARAMETROS.md)). Los valores por defecto de `main.py` no cambian (`--counter v2`, `--max-gate 1.2`, `--accel-std 40`).
 
 ### Salidas fugaces (`--flash-exits`, `src/counter.py::FlashExits`)
 
@@ -51,6 +70,10 @@ Los valores por defecto de `main.py` no cambian (`--counter v2`, `--max-gate 1.2
 4. No cuenta si hubo una abeja rastreada fuera de la ROI cerca de ahí (0.6 escalas) en los últimos 0.5 s: es una abeja que ya andaba volando, como una guardiana que revolotea.
 5. Se descarta si el contador de cruces ya contó una salida a menos de 0.4 s y 40°. Por eso cada salida se decide 1.5 s después.
 6. Con esta opción se apaga la proyección de las salidas al cerrarse un track.
+
+![Una salida fugaz: la abeja que despega se ve en 2 imágenes](img/regla_salidas_fugaces.jpg)
+
+Cuatro imágenes seguidas del `0040-1` (segundo 13.9). La abeja despega de la boca y en las dos imágenes siguientes es una mancha borrosa fuera del círculo, que avanza unos 170 y 210 px. El tracker la esperaba cerca de la piquera (cruz azul) y la segunda detección cae fuera de su ventana de búsqueda, así que nunca llega a ser un ID. `--flash-exits` toma esas dos detecciones sueltas como un trazo y cuenta una salida. Con la configuración recomendada, 27 de las 45 salidas bien contadas del `0040-1` vienen de esta regla.
 
 **Resultado** (minuto completo del `0040-1`, modelo 480, medición estricta, mismos ajustes del tracker):
 
@@ -70,6 +93,10 @@ Con `--flash-exits` solo, las entradas no cambian (F1 0.87); con `--core 0.5` ba
 
 En el `0040-1`, `--core 0.5 --cancel-s 1.0` baja las salidas falsas de 13 a 3. Con `--core 0.3` casi no se cuentan entradas (3 de 36), porque en ese video las abejas no se ven justo en el centro.
 
+![Una guardiana que no llega a la boca y una abeja que sí sale](img/regla_boca_piquera.jpg)
+
+Dos recorridos reales del `0040-1`. La guardiana (naranja, ID 131) vuela 15 s frente al borde derecho y lo cruza hacia fuera varias veces: sin `--core` eran 3 salidas falsas (X). Nunca llega a la boca (círculo magenta), así que con `--core 0.5` no cuenta ninguna. La abeja que sale (rojo, ID 29) pasa por la boca y cuenta en los dos casos.
+
 ### Puntos quietos (`--static-s`)
 
 **Problema:** en el `0020-1` (colmena 002, que el modelo nunca vio) 36 de 43 salidas salían del cuerpo del tubo, y 24 del mismo píxel. Ahí hay una sombra que FOMO ve como abeja en algunos frames. Pasaban dos cosas: `--flash-exits` tomaba cada reaparición de la sombra como un despegue, y cuando el tracker perdía a una abeja en la boca, saltaba a la sombra y cruzaba el borde.
@@ -84,6 +111,10 @@ En el `0040-1`, `--core 0.5 --cancel-s 1.0` baja las salidas falsas de 13 a 3. C
 | `0020-1` | 43 | 16 | 7 |
 
 Las entradas no cambian. La regla se creó mirando el `0020-1`, así que ese video ya no es una prueba ciega de ella.
+
+![Las 43 salidas del 0020-1 sin reglas y cuáles quitan --static-s y --rep-s](img/regla_puntos_quietos.jpg)
+
+Las 43 salidas que se contaban en el `0020-1` sin `--static-s` ni `--rep-s`, cada una en el punto donde se contó (las que caen en el mismo sitio se dibujan juntas en un racimo). 23 salían de una sombra bajo el tubo que FOMO ve como abeja en 292 de los 3596 frames. `--static-s 2` quita 27 (X naranja) y [`--rep-s 60`](#puntos-fijos-repetidos---rep-s) otras 7 (cuadrados magenta). Quedan 9; el conteo de referencia del paper (*Pseudo*) da 7.
 
 ### Puntos fijos repetidos (`--rep-s`)
 
@@ -134,6 +165,10 @@ En el `00511-12`, v7 contaba 10 entradas falsas de 29 y perdía 6 de 13 salidas.
 - `--in-max-age 3`: una entrada solo cuenta si el track nació hace 3 s o menos. La abeja que entra lo hace enseguida (en el `0040-1`, la más lenta tarda 1.7 s). Un track viejo que "entra" es una guardiana o una mancha.
 - `--in-park-s 0.15`: una entrada no cuenta si el track estuvo quieto fuera de la ROI (menos de 0.15 escalas) 0.15 s o más justo antes de entrar. Es una mancha que salta a una abeja.
 - `--park-s 0.9`: un track quieto 0.9 s o más fuera de la ROI (menos de 0.1 escalas, `BeeTracker.is_parked`) es un track estacionado. Solo tapa su propio sitio, no cuenta para la regla 4 y un trazo quieto no se enlaza con una detección lejana.
+
+![Una mancha del borde del tubo que salta a una abeja y cuenta una entrada falsa](img/regla_manchas_fijas.jpg)
+
+Una entrada falsa del `00511-12` con v7, que nunca vio la colmena 005. Una mancha oscura del borde del tubo, justo fuera del círculo: ahí no hay ninguna abeja, pero v7 la confunde con una a ratos durante todo el video, y el tracker la sigue como si fuera una abeja quieta (track 46). Cuando una abeja sale por la boca, el track salta a ella y el contador ve algo que llegó de fuera a la boca. Con `--in-park-s 0.15` esa entrada no cuenta, porque el track estuvo quieto fuera del círculo 0.42 s justo antes de entrar. En esta corrida (Linux, `--roi-x 1075 --roi-y 640 --roi-r 100 --track-scale 220`), `--in-park-s` quita 2 entradas falsas como esta y 1 real.
 
 **Cómo se eligieron (7 oct 2026):** con el `0040-1` y el `0031-2`, los dos contados a mano, y con manchas inyectadas en el `0040-1` (6 semillas). "Antes" ya incluye `--rep-s 60`. Cada celda es bien / contadas y F1.
 
@@ -250,7 +285,9 @@ Error medio total (|IN-42|+|OUT-42|): v1=335, v2=91
 
 ---
 
-## Tracker v1 (EuTrack)
+## Versión anterior: tracker v1 (EuTrack)
+
+Se conserva para comparar (`--tracker v1`) y porque el banco de pruebas de arriba la usa como referencia. El tracker v2 la reemplazó por los problemas descritos al inicio.
 
 El análisis del flujo de abejas en la piquera de *Tetragonisca angustula* presenta desafíos únicos para la visión por computadora: las abejas se cruzan constantemente a altas velocidades, oscilan o revolotean en la entrada sin decidirse a salir, y pueden aparecer borrosas debido a la limitación de cuadros por segundo de la cámara.
 

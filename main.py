@@ -27,6 +27,45 @@ from src.detection import cluster_centroids
 from src.dashboard import Dashboard
 
 
+def draw_hud(frame, counts):
+    """
+    Dibuja el tablero de entradas y salidas en la esquina superior izquierda.
+
+    El texto es el doble de grande que antes para leerlo de lejos (demo, pantalla
+    de la Pi). Los tamaños se escalan con la altura del frame: se ve igual en 720p
+    y en 1080p.
+    """
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    k = frame.shape[0] / 1080.0                          # 1.0 en 1080p, 0.67 en 720p
+    tit_s, tit_t = 1.0 * k, max(1, round(2 * k))         # título
+    row_s, row_t = 1.3 * k, max(2, round(4 * k))         # "Entradas (IN) : 12"
+    pad = max(6, int(20 * k))
+
+    title = "Tetragonisca Vision EdgeAI"
+    rows = [
+        (f"Entradas (IN) : {counts['in']}", (0, 255, 0)),
+        (f"Salidas  (OUT): {counts['out']}", (0, 0, 255)),
+    ]
+    (tw, th), _ = cv2.getTextSize(title, font, tit_s, tit_t)
+    sizes = [cv2.getTextSize(r[0], font, row_s, row_t)[0] for r in rows]
+    # Ancho fijo (con 3 dígitos) para que la caja no cambie de tamaño al contar
+    (rw, rh), _ = cv2.getTextSize("Salidas  (OUT): 000", font, row_s, row_t)
+    row_h = rh + pad
+    box_w = max(tw, rw) + 2 * pad
+    box_h = 2 * pad + th + 2 * row_h
+
+    x0 = y0 = max(5, int(10 * k))
+    overlay = frame.copy()
+    cv2.rectangle(overlay, (x0, y0), (x0 + box_w, y0 + box_h), (0, 0, 0), -1)
+    cv2.addWeighted(overlay, 0.6, frame, 0.4, 0, frame)
+
+    x, y = x0 + pad, y0 + pad + th
+    cv2.putText(frame, title, (x, y), font, tit_s, (255, 255, 255), tit_t)
+    for text, color in rows:
+        y += row_h
+        cv2.putText(frame, text, (x, y), font, row_s, color, row_t)
+
+
 class LatestFrameReader:
     """
     Lee la cámara en un hilo aparte y guarda solo el frame más reciente.
@@ -73,7 +112,7 @@ class FOMODetector:
     Detector de centroides basado en el modelo FOMO (.lite / .tflite) exportado desde Edge Impulse.
     """
 
-    def __init__(self, model_path="models/v3_fomo_tetragonisca_int8.lite", threshold=0.6, num_threads=1,
+    def __init__(self, model_path="models/v5_fomo_borrosas_480_int8.lite", threshold=0.6, num_threads=1,
                  crop_center=None, crop_size=None):
         self.interpreter = tflite.Interpreter(
             model_path=model_path,
@@ -163,7 +202,7 @@ def main():
     parser.add_argument(
         "--model",
         type=str,
-        default="models/v3_fomo_tetragonisca_int8.lite",
+        default="models/v5_fomo_borrosas_480_int8.lite",
         help="Ruta al modelo .lite / .tflite",
     )
     parser.add_argument(
@@ -385,7 +424,17 @@ def main():
     global_start_time = time.time()
     t_first = None   # hora del primer frame: no cuenta el arranque de la cámara
 
+    t_show0 = None   # con --show y video de archivo: hora en que "empezó" la reproducción
+    t_last_show = 0.0   # hora de la última imagen mostrada: la ventana se refresca como máximo a 30 veces por segundo
     if args.show:
+        if sys.platform == "win32":
+            # Sin esto, con la escala de pantalla de Windows (125 %, 150 %) la
+            # ventana de OpenCV se ve borrosa
+            try:
+                import ctypes
+                ctypes.windll.shcore.SetProcessDpiAwareness(2)
+            except Exception:
+                pass
         win_name = "Tetragonisca Vision - Inferencia y Conteo"
         cv2.namedWindow(win_name, cv2.WINDOW_NORMAL)
         cv2.resizeWindow(win_name, min(width, 1280), min(height, 720))
@@ -456,7 +505,10 @@ def main():
         # Calcular si necesitamos renderizar el frame
         # (solo cuando hay que mostrarlo, guardarlo en video o hacer snapshot)
         need_snapshot = args.snapshot_every > 0 and frame_idx % args.snapshot_every == 0
-        need_render = out is not None or args.show or need_snapshot
+        # La ventana se refresca como máximo a 30 veces por segundo: dibujar y mostrar
+        # cada imagen de un video a 60 fps frena el análisis sin que se note en pantalla
+        show_now = args.show and (time.perf_counter() - t_last_show) >= 1 / 30
+        need_render = out is not None or show_now or need_snapshot
 
         if need_render:
             # 4. Renderizado visual (Piquera, IDs, Trayectorias y HUD)
@@ -511,37 +563,7 @@ def main():
                         cv2.circle(frame, (int(pt[0]), int(pt[1])), radius, color, -1)
 
             # Tablero de Estadísticas (HUD Transparente)
-            overlay = frame.copy()
-            cv2.rectangle(overlay, (10, 10), (300, 105), (0, 0, 0), -1)
-            cv2.addWeighted(overlay, 0.6, frame, 0.4, 0, frame)
-
-            cv2.putText(
-                frame,
-                "Tetragonisca Vision EdgeAI",
-                (20, 30),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.5,
-                (255, 255, 255),
-                1,
-            )
-            cv2.putText(
-                frame,
-                f"Entradas (IN) : {counts['in']}",
-                (20, 60),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.6,
-                (0, 255, 0),
-                2,
-            )
-            cv2.putText(
-                frame,
-                f"Salidas  (OUT): {counts['out']}",
-                (20, 88),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.6,
-                (0, 0, 255),
-                2,
-            )
+            draw_hud(frame, counts)
 
             if out is not None:
                 out.write(frame)
@@ -585,9 +607,28 @@ def main():
             time_str = f"{h:02d}:{m:02d}:{s:02d}" if h > 0 else f"{m:02d}:{s:02d}"
             print(f"[{time_str}] Procesando frame {frame_idx:05d} | FPS: {fps_proc:.1f} | IN: {counts['in']} | OUT: {counts['out']}")
 
-        if args.show:
-            cv2.imshow("Tetragonisca Vision - Inferencia y Conteo", frame)
-            if cv2.waitKey(1) & 0xFF == ord('q'):
+        if show_now:
+            t_last_show = time.perf_counter()
+            # Achicar con buena calidad al tamaño de la ventana (si la ventana lo
+            # hace sola, en Windows queda pixelado)
+            shown = frame
+            try:
+                _, _, ww, wh = cv2.getWindowImageRect(win_name)
+            except cv2.error:
+                ww = wh = 0
+            if 0 < ww < frame.shape[1] and 0 < wh < frame.shape[0]:
+                k = min(ww / frame.shape[1], wh / frame.shape[0])
+                shown = cv2.resize(frame, (int(frame.shape[1] * k), int(frame.shape[0] * k)),
+                                   interpolation=cv2.INTER_AREA)
+            cv2.imshow(win_name, shown)
+            wait_ms = 1
+            if not is_camera:
+                # Video de archivo: no mostrarlo más rápido que su velocidad real
+                if t_show0 is None:
+                    t_show0 = time.perf_counter() - frame_idx / fps
+                ahead = t_show0 + frame_idx / fps - time.perf_counter()
+                wait_ms = max(1, int(ahead * 1000))
+            if cv2.waitKey(wait_ms) & 0xFF == ord('q'):
                 break
 
     t_last_frame = time.time()

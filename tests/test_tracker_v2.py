@@ -1,6 +1,6 @@
 """
 Pruebas del tracker v2 (BeeTracker) y del contador v2 (BeeCounterV2)
-con trayectorias sintéticas. Ejecutar:  python test_tracker_v2.py   (o pytest)
+con trayectorias sintéticas. Ejecutar desde la raíz del repositorio:  pytest
 """
 import numpy as np
 

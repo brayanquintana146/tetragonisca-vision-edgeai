@@ -1,6 +1,6 @@
 """
 Prueba del tracker v1 (EuTrack).
-Ejecutar: python test_tracker.py (o pytest)
+Ejecutar desde la raíz del repositorio: pytest
 """
 from src.tracker import EuTrack
 

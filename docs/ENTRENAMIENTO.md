@@ -15,8 +15,11 @@ Para replicar el proceso actual de procesamiento local de datos y carga a Edge I
 git clone https://github.com/brayanquintana146/tetragonisca-vision-edgeai.git
 cd tetragonisca-vision-edgeai
 
-# Instalar librería para manipulación de imágenes
-pip install Pillow
+# Dependencias de Python (incluye Pillow para los scripts de datos)
+pip install -r requirements.txt
+
+# CLI de Edge Impulse para subir los datos (necesita Node.js)
+npm install -g edge-impulse-cli
 ```
 
 ### Paso 2: Descargar los datos crudos (Colmena 004)
@@ -27,6 +30,10 @@ curl.exe -L "https://zenodo.org/records/10439007/files/004%20-%20Object%20Detect
 Expand-Archive -Path "004 - Object Detection.zip" -DestinationPath "004_Object_Detection_Raw" -Force
 cd ../..
 ```
+
+Cada foto del conjunto trae un `.txt` en formato YOLO con una caja por abeja. FOMO no usa el tamaño de la caja: Edge Impulse la convierte en la celda de la grilla donde cae su centro, y eso es lo que el modelo aprende a marcar.
+
+![Cajas de etiqueta y celdas que aprende FOMO](img/entrenamiento_etiquetas.jpg)
 
 ### Paso 3: Preparar el conjunto de entrenamiento y balancear la clase negativa
 
@@ -60,7 +67,11 @@ python scripts/03_preparar_test.py
    ```powershell
    edge-impulse-uploader --api-key TU_API_KEY --category training --directory data/processed/train --dataset-format yolo-txt
    ```
-4. Subir las imágenes reservadas de prueba (test):
+4. **Subir las imágenes reservadas de prueba (`test`):**
+   ```powershell
+   edge-impulse-uploader --api-key TU_API_KEY --category testing --directory data/processed/test --dataset-format yolo-txt
+   ```
+   La API Key da acceso al proyecto: se escribe solo en la terminal y nunca se guarda en un archivo del repositorio.
 5. Verificar etiquetas en Edge Impulse Studio:
    - Comprobar en la plataforma que tanto las imágenes de Training como las de Test conserven sus etiquetas correctamente.
    - Excepción esperada: Los 50 parches de madera lisa y la foto de muestra de la piquera limpia en Training no tendrán etiquetas de abejas por pertenecer a la clase negativa (`unknown`).
@@ -114,7 +125,7 @@ Los scripts del pipeline buscan **todas** las carpetas `train`, `valid` y `test`
 
 > **¿Cuándo aplicar este paso?** Solo cuando el nuevo dataset fue grabado con la cámara más lejos de lo habitual y las abejas se ven significativamente más pequeñas que en los datasets anteriores. Si las abejas se ven de un tamaño similar al de los otros datasets, **salta este paso**.
 
-Al comprimir imágenes con mucho "paisaje" a los `320 × 320 px` del modelo, las abejas pierden definición y se convierten en manchas de pocos píxeles, lo que reduce drásticamente el **Recall**. La solución es **recortar (crop)** las imágenes para eliminar el paisaje sobrante antes de subirlas, de modo que las abejas ocupen la misma proporción que en los datasets cercanos.
+Al comprimir imágenes con mucho "paisaje" a la entrada del modelo (`480 × 480 px` desde la v5, `320 × 320 px` antes), las abejas pierden definición y se convierten en manchas de pocos píxeles, lo que reduce drásticamente el **Recall**. La solución es **recortar (crop)** las imágenes para eliminar el paisaje sobrante antes de subirlas, de modo que las abejas ocupen la misma proporción que en los datasets cercanos.
 
 #### A. Recortar las imágenes con FastStone Photo Resizer
 
@@ -203,7 +214,7 @@ edge-impulse-uploader --api-key TU_API_KEY --category testing --directory data/p
 
 En el menú lateral de Edge Impulse Studio, ir a **Impulse Design > Create Impulse**:
 
-1. **Image Data (Input Block):** `320 × 320 px` | Resize mode: `Fit shortest axis`.
+1. **Image Data (Input Block):** `480 × 480 px` (desde la v5; hasta la v4 era `320 × 320 px`) | Resize mode: `Fit shortest axis`.
 2. **Processing Block:** `Image` (color depth: **RGB**).
 3. **Learning Block:** `Object Detection (Images)` — seleccionar la variante **FOMO**.
 4. Hacer clic en **Save Impulse**.
@@ -248,25 +259,18 @@ En el menú lateral de Edge Impulse Studio, ir a **Impulse Design > Create Impul
 
 ### Paso 9: Descargar el modelo exportado (Deployment)
 
-#### Modelo `.lite` (TensorFlow Lite — para inferencia en Python/PC)
+El mismo archivo `.lite` sirve en el PC y en la Raspberry Pi 5: `main.py` lo ejecuta con LiteRT en Linux y con TensorFlow en Windows.
 
 1. En el menú lateral, ir a **Deployment**.
 2. En la sección **Libraries**, seleccionar **TensorFlow Lite (int8)**.
 3. Hacer clic en **Build** y descargar el archivo generado.
-4. Reemplazar el archivo anterior en la carpeta `models/` del repositorio:
+4. Guardarlo en `models/` con la versión al inicio del nombre, sin reemplazar los anteriores:
    ```
-   models/v3_fomo_tetragonisca_int8.lite   ← reemplazar con el archivo descargado
+   models/v9_fomo_<qué cambió>_480_int8.lite
    ```
+5. Correr `main.py` con `--model` apuntando al archivo nuevo y comparar contra el conteo a mano ([VALIDACION.md](VALIDACION.md)) antes de cambiar el modelo por defecto.
 
-#### Modelo `.eim` (Edge Impulse Linux Runner — para Raspberry Pi 5 / Linux AARCH64)
-
-1. En el menú lateral, ir a **Deployment**.
-2. En la sección **Run your impulse locally**, seleccionar **Linux (AARCH64)**.
-3. Hacer clic en **Build** y descargar el archivo `.eim`.
-4. Reemplazar el archivo anterior en la carpeta `models/`:
-   ```
-   models/model_tetragonisca.eim        ← reemplazar con el archivo descargado
-   ```
+Las primeras versiones también se exportaban como `.eim` (Edge Impulse Linux Runner). Ya no se usa: el `.lite` corre en la Pi con LiteRT y no depende del SDK de Edge Impulse.
 
 ### Paso 10: Guardar la nueva versión del modelo (Versioning)
 
@@ -284,7 +288,9 @@ El ciclo queda completo. El workspace de Edge Impulse puede recibir el siguiente
 
 ## Métricas de entrenamiento (validación)
 
-El rendimiento del modelo FOMO se evaluó en la fase de entrenamiento utilizando el conjunto de validación de Edge Impulse Studio (20% de los datos de entrenamiento):
+Las métricas de esta sección y de la siguiente son de la **v2** (colmenas 004, 005 y 001), la primera versión multicolmena, y sirven de ejemplo de cómo leer los resultados de Edge Impulse. Las de todas las versiones, incluida la **v5** recomendada, están en el [historial](#historial-de-evolución-de-métricas-test-set).
+
+El conjunto de validación es el 20 % de los datos de entrenamiento, separado por Edge Impulse:
 
 ### Matriz de Confusión (Validation Set)
 
@@ -307,11 +313,11 @@ El rendimiento del modelo FOMO se evaluó en la fase de entrenamiento utilizando
 1. **Eliminación Total de Falsos Positivos (Precision = 1.00):**
    - La inyección de los 50 parches de madera lisa con etiquetas vacías (*Data-Centric AI*) permitió a la red neuronal aprender a ignorar las vetas y texturas de la piquera.
 2. **Sensibilidad y Oclusiones (Recall = 0.87):**
-   - El 12.8% de falsos negativos responde a abejas que ingresaron en ángulos complejos o en bordes de la celda de salida de FOMO, un margen aceptable para muestreo temporal en microcontroladores de bajos recursos.
+   - El 12.8% de falsos negativos responde a abejas que ingresaron en ángulos complejos o en bordes de la celda de salida de FOMO, un margen aceptable para un detector que corre en un equipo de bajos recursos como la Raspberry Pi. En el conteo, el seguimiento compensa parte de estas pérdidas: una abeja no detectada en una imagen sigue con su identificador si se la vuelve a ver poco después.
 
 ## Métricas de prueba e historial de versiones
 
-Posteriormente, se ejecutó una evaluación masiva en la pestaña **Model testing** (*Classify all*) sobre el conjunto reservado de prueba (*Testing set*), el cual contiene imágenes que el modelo **nunca vio durante el entrenamiento**:
+Después se evaluó la misma v2 en la pestaña **Model testing** (*Classify all*) sobre el conjunto reservado de prueba (*Testing set*), el cual contiene imágenes que el modelo **nunca vio durante el entrenamiento**:
 
 ### Resumen General del Modelo (Test Set)
 
@@ -348,8 +354,14 @@ Para evaluar el impacto de agregar variabilidad al modelo, se registran las mét
 | [**`-multihive`**](https://studio.edgeimpulse.com/studio/1108884) | **v7** | v5 **sin la colmena 005** (344 muestras de train y 50 de test desactivadas, incluidos sus 50 fondos). **480×480** | 91.49% | 0.98 | 0.89 | 0.93 | Prueba *leave-one-hive-out*: el modelo nunca vio la 005. Su test ya no tiene imágenes de la 005, así que no se compara directo con la v5. Las muestras siguen en el proyecto (desactivadas). |
 | [**`-multihive`**](https://studio.edgeimpulse.com/studio/1108884) | **v8** | v7 + los **50 fondos de la colmena 005** (sin ninguna abeja de la 005). **480×480** | 98.94% | 1.00 | 0.88 | 0.94 | Prueba de la hipótesis de los fondos: ¿basta con fotos del fondo de una piquera nueva para quitar las salidas falsas? Su test no tiene imágenes de la 005, así que el F1 no responde eso; lo responde la corrida del `00517-18`. |
 
+![Historial de F1 y recall por versión del modelo](img/entrenamiento_historial.png)
+
+Las líneas se cortan donde cambia el conjunto de prueba: desde la v5 incluye abejas borrosas y desde la v7 ya no tiene la colmena 005. Solo se comparan versiones dentro de un mismo tramo; por ejemplo, la v5 y la v6 usan el mismo test y la v6 (320×320) encuentra menos abejas. El círculo marca la v5, la recomendada.
+
 **480 frente a 320 (mismo test, mismos datos, mismos parámetros):** la resolución 480 detecta más abejas (recall 0.89 frente a 0.85) sin falsos positivos (precisión 1.00). Con 480 las abejas borrosas conservan más detalle al reducir el recorte de 1080 px. A cambio, el modelo hace ~2.25 veces más cálculo, así que hay que medir los FPS en la Raspberry Pi. La v5 y la v6 no se comparan directamente con la v3, porque su test incluye abejas borrosas.
 
 **Etiqueta unificada (3 oct 2026).** Hasta la v3 las cajas tenían dos etiquetas: `Abeja` y `Abeja\r` (un `\r` de Windows en un `classes.txt`). `tools/renombrar_etiqueta_ei.py` renombró 13,373 cajas en 1,391 muestras y ahora hay una sola clase. Renombrar cajas pide una API key con rol **Admin**. Los `classes.txt` nuevos se escriben sin salto de línea.
 
 **Abejas en vuelo (borrosas).** El modelo casi no detecta a las abejas que despegan, porque salen borrosas: la v4 tenía solo ~20 entre los 196 despegues. `scripts/05_extraer_borrosas.py` busca, en videos sin anotar, los frames donde algo se mueve cerca de la piquera y FOMO no lo detecta. Así salieron 273 frames útiles de 44 videos de la colmena 004, sin contar el `0040-1` ni el `00427-28`. Las imágenes de 6 videos (1.º, 8.º, 15.º, 22.º, 29.º y 36.º de la carpeta) van a *test*, separadas **por video** para que no haya frames casi iguales en train y test.
+
+![Seis abejas borrosas en vuelo agregadas para la v5](img/entrenamiento_borrosas.jpg)

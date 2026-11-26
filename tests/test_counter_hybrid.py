@@ -1,6 +1,6 @@
 """
 Pruebas del contador híbrido (salidas por cruce, entradas por origen-destino)
-con trayectorias sintéticas. Ejecutar:  python test_counter_hybrid.py   (o pytest)
+con trayectorias sintéticas. Ejecutar desde la raíz del repositorio:  pytest
 """
 import numpy as np
 

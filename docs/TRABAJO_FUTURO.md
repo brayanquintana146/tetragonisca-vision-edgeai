@@ -1,8 +1,8 @@
-# Pendientes
+# Trabajo futuro
 
-Última actualización: 11 de octubre de 2026.
+Actualizado el 25 de noviembre de 2026.
 
-Meta del proyecto: que el sistema cuente bien en una colmena que el modelo nunca vio, sin cargar fotos de su fondo. El estado actual está en [VALIDACION.md](VALIDACION.md).
+La meta es que el sistema cuente bien en una colmena que el modelo nunca vio, sin cargar fotos de su fondo, y que funcione instalado en una colmena de Huyro. El estado actual está en [VALIDACION.md](VALIDACION.md). Los puntos van en orden de lo que más puede mejorar el conteo.
 
 ## 1. Entrenar el modelo v10 con más abejas borrosas
 
@@ -55,14 +55,18 @@ Hoy la evidencia es de una sola colmena nueva. Falta repetirla dejando fuera la 
 
 En la prueba a ciegas agregó salidas falsas y no recuperó ninguna. Quitarla necesita otra prueba a ciegas con videos del punto 2.
 
-## 5. Código y repositorio
+## 5. Instalación en la colmena
+
+- Que `--events` guarde la hora real de cada evento y corte un archivo por día. Hoy guarda el segundo del video, que basta para medir pero no para seguir una colmena durante semanas.
+- Conectar el conteo con el resto de la colmena inteligente (temperatura, humedad y peso), que lee el CSV de eventos para dar avisos al meliponicultor: por ejemplo, salidas que caen a cero con buen clima.
+- Probar la cámara y la Raspberry Pi frente a una colmena real, varios días seguidos.
+
+## 6. Código
 
 - Pasar a `bench/` los scripts de la prueba a ciegas (detección foto por foto, conteo por grupos de videos, manchas inyectadas).
-- Que `--events` guarde la hora real de cada evento, escriba a disco de inmediato y corte un archivo por día.
-- `test_tracker.py` (tracker v1) falla; `bench/make_scenarios.py` necesita TensorFlow en Windows.
-- Revisar `output_result.mp4` y la carpeta `CARPETA_COFRE_MOVER_CARPETA_PRINCIPAL`.
+- `bench/make_scenarios.py` necesita TensorFlow en Windows.
 
-## 6. Cámara
+## 7. Cámara
 
 - Probar exposiciones más cortas en la C930e (`v4l2-ctl`, ver [deployment.md](../deployment.md)): si el despegue sale menos borroso, el detector lo ve más imágenes.
 - La C930e graba a 30 fps y las reglas de salidas fugaces se ajustaron a 60 fps: revisar `max_hits` y `max_gap_s` con un video de esa cámara.

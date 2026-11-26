@@ -1,6 +1,6 @@
 """
 Prueba del contador v1 (BeeCounter) con EuTrack.
-Ejecutar: python test_counter.py (o pytest)
+Ejecutar desde la raíz del repositorio: pytest
 """
 from src.counter import BeeCounter
 from src.tracker import EuTrack
