@@ -11,7 +11,7 @@ Un detector FOMO de 54 KB encuentra las abejas en cada imagen. Un algoritmo de s
 
 <p align="center"><img src="docs/img/demo_conteo.webp" alt="Conteo en vivo en el video 0040-1" width="360"></p>
 
-<p align="center"><i>Los primeros 12 segundos del video <code>0040-1</code>. Cada punto es una abeja con su número de seguimiento; el tablero suma una entrada o una salida cuando una abeja cruza el círculo amarillo.</i></p>
+<p align="center"><i>Los primeros 12 segundos del video <code>0040-1</code>. Cada punto es una abeja con su número de seguimiento. El círculo magenta es la boca de la piquera y el amarillo es el borde donde se cuenta: el tablero suma una entrada o una salida cuando una abeja cruza el círculo amarillo.</i></p>
 
 ## El problema
 
